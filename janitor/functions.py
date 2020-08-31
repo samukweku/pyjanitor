@@ -3247,6 +3247,8 @@ def groupby_agg(
 
     # convert to list
     # needed when creating a mapping through the iteration
+    df = df.copy()
+
     if isinstance(by, str):
         by = [by]
     # this is a temporary measure, till the minimum Pandas version is 1.1,
@@ -4005,6 +4007,7 @@ def expand_grid(
     :raises: TypeError if others is not a dictionary
     :raises: KeyError if there is a dataframe and no key is provided.
     """
+
     # check if others is a dictionary
     if not isinstance(others, dict):
         # strictly name value pairs
@@ -4111,6 +4114,7 @@ def process_text(
     :raises: KeyError if ``string_function`` is not a Pandas string method.
     :raises: TypeError if wrong ``arg`` or ``kwarg`` is supplied.
     """
+    df = df.copy()
 
     pandas_string_methods = [
         func.__name__
@@ -4218,6 +4222,8 @@ def fill_direction(
     :raises: ValueError if direction supplied is not one of `down`,`up`,
         `updown`, or `downup`.
     """
+
+    df = df.copy()
 
     # check that dictionary is not empty
     if not directions:
