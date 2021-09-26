@@ -14,7 +14,6 @@ from itertools import chain
 from typing import (
     Callable,
     Dict,
-    Hashable,
     Iterable,
     List,
     NamedTuple,
@@ -466,7 +465,7 @@ def _computations_expand_grid(others: dict) -> pd.DataFrame:
     """
 
     for key in others:
-        check("key", key, [Hashable])
+        check("key", key, [str])
 
     grid = {}
 
