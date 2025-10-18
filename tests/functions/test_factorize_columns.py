@@ -7,8 +7,11 @@ Because underneath the hood we are using `pd.factorize`,
 we intentionally do not test the values of the resultant dataframe.
 That would be duplicating the tests from what the `pandas` library provides.
 """
+
 import pandas as pd
 import pytest
+
+import janitor  # noqa: F401
 
 
 @pytest.mark.functions

@@ -1,10 +1,12 @@
 """Tests for inflate_currency() in finance module."""
+
 import pytest
 import requests
 
 from janitor.finance import _inflate_currency, inflate_currency  # noqa: F401
 
 
+@pytest.mark.xfail(reason="Relies on external API call.")
 @pytest.mark.finance
 def test_make_currency_inflator_api_request():
     """Test for currency inflator API request.
@@ -20,6 +22,7 @@ def test_make_currency_inflator_api_request():
     assert r.status_code == 200
 
 
+@pytest.mark.xfail(reason="Relies on external API call.")
 @pytest.mark.finance
 def test_make_new_inflated_currency_col(dataframe):
     """Test currency inflation for same year added as a new column."""
@@ -33,6 +36,7 @@ def test_make_new_inflated_currency_col(dataframe):
     assert all(df["a"] == df["a_2018"])
 
 
+@pytest.mark.xfail(reason="Relies on external API call.")
 @pytest.mark.finance
 def test_inflate_existing_currency_col(dataframe):
     """Test currency inflation updates existing column."""
@@ -50,6 +54,7 @@ def test_inflate_existing_currency_col(dataframe):
     assert (initialval * inflator) == pytest.approx(updatedval)
 
 
+@pytest.mark.xfail(reason="Relies on external API call.")
 @pytest.mark.finance
 def test_expected_result(dataframe):
     """Test inflation calculation gives expected value."""
@@ -67,6 +72,7 @@ def test_expected_result(dataframe):
     assert (initialval * inflator) == pytest.approx(updatedval)
 
 
+@pytest.mark.xfail(reason="Relies on external API call.")
 @pytest.mark.finance
 def test_expected_result_with_full_country_name(dataframe):
     """Test inflation calculation works when providing country name."""
@@ -86,6 +92,7 @@ def test_expected_result_with_full_country_name(dataframe):
     assert (initialval * inflator) == pytest.approx(updatedval)
 
 
+@pytest.mark.xfail(reason="Relies on external API call.")
 @pytest.mark.finance
 def test_wb_country_check(dataframe):
     """Test inflation calculation fails when providing invalid country name."""
@@ -95,6 +102,7 @@ def test_wb_country_check(dataframe):
         )
 
 
+@pytest.mark.xfail(reason="Relies on external API call.")
 @pytest.mark.finance
 def test_year_check(dataframe):
     """Test inflation calculation fails with year outside valid range."""
@@ -104,6 +112,7 @@ def test_year_check(dataframe):
         )
 
 
+@pytest.mark.xfail(reason="Relies on external API call.")
 @pytest.mark.finance
 def test_datatypes_check(dataframe):
     """Test inflation calculation fails when provided invalid types."""
@@ -119,6 +128,7 @@ def test_datatypes_check(dataframe):
         )
 
 
+@pytest.mark.xfail(reason="Relies on external API call.")
 @pytest.mark.finance
 def test_api_result_check(dataframe):
     """Test inflation calculation fails with year outside API's valid range."""
@@ -128,6 +138,7 @@ def test_api_result_check(dataframe):
         )
 
 
+@pytest.mark.xfail(reason="Relies on external API call.")
 @pytest.mark.finance
 def test_to_year_available(dataframe):
     """Test inflation calculation fails with unavailable to_year."""
@@ -137,6 +148,7 @@ def test_to_year_available(dataframe):
         )
 
 
+@pytest.mark.xfail(reason="Relies on external API call.")
 @pytest.mark.finance
 def test_currency_year_available(dataframe):
     """Test inflation calculation fails with unavailable currency_year."""

@@ -1,15 +1,14 @@
 """Top-level janitor API lives here."""
-try:
-    import janitor.xarray  # noqa: F401
-except ImportError:
-    pass
 
+import pandas_flavor as pf  # noqa: F401
+
+from .accessors import *  # noqa: F403, F401
 from .functions import *  # noqa: F403, F401
 from .io import *  # noqa: F403, F401
 from .math import *  # noqa: F403, F401
 from .ml import get_features_targets as _get_features_targets
 from .utils import refactored_function
-from .accessors import *  # noqa: F403, F401
+from .xarray import *  # noqa: F403, F401
 
 
 @refactored_function(
@@ -20,4 +19,4 @@ def get_features_targets(*args, **kwargs):
     return _get_features_targets(*args, **kwargs)
 
 
-__version__ = "0.22.0"
+__version__ = "0.31.0"

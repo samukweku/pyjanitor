@@ -1,2 +1,3 @@
-"""Top-level imports for pyjanitor's dataframe accessors."""
-from .data_description import DataDescription
+"""Miscellaneous mathematical operators."""
+
+from janitor.accessors.data_description import DataDescription  # noqa: F401

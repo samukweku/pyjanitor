@@ -6,6 +6,7 @@ from pandas.testing import assert_frame_equal
 
 @pytest.fixture
 def df_checks_output():
+    """pytest fixture"""
     return pd.DataFrame(
         {
             "geoid": [1, 1, 13, 13],
@@ -22,43 +23,24 @@ def df_checks_output():
     )
 
 
-@pytest.mark.xfail(reason="list-like is converted to list.")
-def test_type_index(df_checks_output):
-    """Raise TypeError if wrong type is provided for the `index`."""
-    with pytest.raises(TypeError):
-        df_checks_output.pivot_wider(index={"geoid"}, names_from="variable")
-
-    with pytest.raises(TypeError):
-        df_checks_output.pivot_wider(
-            index=("geoid", "name"), names_from="variable"
-        )
-
-
-@pytest.mark.xfail(reason="list-like is converted to list.")
-def test_type_names_from(df_checks_output):
-    """Raise TypeError if wrong type is provided for `names_from`."""
-    with pytest.raises(TypeError):
-        df_checks_output.pivot_wider(index="geoid", names_from={"variable"})
-
-    with pytest.raises(TypeError):
-        df_checks_output.pivot_wider(index="geoid", names_from=("variable",))
-
-
-def test_names_from_None(df_checks_output):
+def test_names_from_none(df_checks_output):
     """Raise ValueError if no value is provided for `names_from`."""
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        ValueError,
+        match=r"pivot_wider\(\) is missing 1 required argument.+",
+    ):
         df_checks_output.pivot_wider(index="geoid", names_from=None)
 
 
 def test_presence_index1(df_checks_output):
     """Raise KeyError if labels in `index` do not exist."""
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError, match="No match was returned.+"):
         df_checks_output.pivot_wider(index="geo", names_from="variable")
 
 
 def test_presence_index2(df_checks_output):
     """Raise KeyError if labels in `index` do not exist."""
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError, match="No match was returned.+"):
         df_checks_output.pivot_wider(
             index=["geoid", "Name"], names_from="variable"
         )
@@ -66,24 +48,16 @@ def test_presence_index2(df_checks_output):
 
 def test_presence_names_from1(df_checks_output):
     """Raise KeyError if labels in `names_from` do not exist."""
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError, match="No match was returned.+"):
         df_checks_output.pivot_wider(index="geoid", names_from="estmt")
 
 
-def test_presence_names_from2(df_checks_output):
+def test_presence_names_from2(
+    df_checks_output, match="No match was returned.+"
+):
     """Raise KeyError if labels in `names_from` do not exist."""
     with pytest.raises(KeyError):
         df_checks_output.pivot_wider(index="geoid", names_from=["estimat"])
-
-
-def test_names_sort_wrong_type(df_checks_output):
-    """Raise TypeError if the wrong type is provided for `names_sort`."""
-    with pytest.raises(TypeError):
-        df_checks_output.pivot_wider(
-            index="name",
-            names_from=["estimate", "variable"],
-            names_sort=2,
-        )
 
 
 def test_flatten_levels_wrong_type(df_checks_output):
@@ -96,40 +70,43 @@ def test_flatten_levels_wrong_type(df_checks_output):
         )
 
 
-@pytest.mark.xfail(reason="parameter is deprecated.")
-def test_names_from_position_wrong_type(df_checks_output):
-    """
-    Raise TypeError if the wrong type
-    is provided for `names_from_position`.
-    """
-    with pytest.raises(TypeError):
+def test_names_glue_wrong_label(df_checks_output):
+    """Raise KeyError if the wrong column label is provided in `names_glue`."""
+    with pytest.raises(
+        KeyError, match="'variabl' is not a column label in names_from."
+    ):
         df_checks_output.pivot_wider(
-            index="name",
-            names_from=["estimate", "variable"],
-            names_from_position=2,
+            index=["geoid", "name"],
+            names_from="variable",
+            values_from=["estimate", "error"],
+            names_glue="{variabl}_{_value}",
         )
 
 
-@pytest.mark.xfail(reason="parameter is deprecated.")
-def test_names_from_position_wrong_value(df_checks_output):
+def test_names_glue_wrong_label1(df_checks_output):
     """
-    Raise ValueError if `names_from_position`
-    is not "first" or "last".
+    Raise KeyError if the wrong column label is provided in `names_glue`,
+    And the columns is a single Index.
     """
-    with pytest.raises(ValueError):
+    with pytest.raises(
+        KeyError, match="'variabl' is not a column label in names_from."
+    ):
         df_checks_output.pivot_wider(
-            index="name",
-            names_from=["estimate", "variable"],
-            names_from_position="1st",
+            ["geoid", "name"],
+            "variable",
+            "estimate",
+            names_glue="{variabl}_estimate",
         )
 
 
-@pytest.mark.xfail(reason="parameter is deprecated.")
-def test_name_prefix_wrong_type(df_checks_output):
-    """Raise TypeError if the wrong type is provided for `names_prefix`."""
-    with pytest.raises(TypeError):
-        df_checks_output.pivot_wider(
-            index="name", names_from=["estimate", "variable"], names_prefix=1
+def test_names_glue_wrong_label2(df_checks_output):
+    """Raise Warning if _value is in `names_glue`."""
+    with pytest.warns(UserWarning):
+        df_checks_output.rename(columns={"variable": "_value"}).pivot_wider(
+            index=["geoid", "name"],
+            names_from="_value",
+            values_from=["estimate", "error"],
+            names_glue="{_value}_{_value}",
         )
 
 
@@ -141,37 +118,35 @@ def test_name_sep_wrong_type(df_checks_output):
         )
 
 
+def test_name_expand_wrong_type(df_checks_output):
+    """Raise TypeError if the wrong type is provided for `names_expand`."""
+    with pytest.raises(TypeError):
+        df_checks_output.pivot_wider(
+            index="name", names_from=["estimate", "variable"], names_expand=1
+        )
+
+
+def test_id_expand_wrong_type(df_checks_output):
+    """Raise TypeError if the wrong type is provided for `id_expand`."""
+    with pytest.raises(TypeError):
+        df_checks_output.pivot_wider(
+            index="name", names_from=["estimate", "variable"], id_expand=1
+        )
+
+
+def test_reset_index_wrong_type(df_checks_output):
+    """Raise TypeError if the wrong type is provided for `reset_index`."""
+    with pytest.raises(TypeError):
+        df_checks_output.pivot_wider(
+            index="name", names_from=["estimate", "variable"], reset_index=1
+        )
+
+
 def test_name_glue_wrong_type(df_checks_output):
     """Raise TypeError if the wrong type is provided for `names_glue`."""
     with pytest.raises(TypeError):
         df_checks_output.pivot_wider(
             index="name", names_from=["estimate", "variable"], names_glue=1
-        )
-
-
-def test_levels_order_wrong_type(df_checks_output):
-    """Raise TypeError if the wrong type is provided for `levels_order`."""
-    with pytest.raises(TypeError):
-        df_checks_output.pivot_wider(
-            index="name", names_from=["estimate", "variable"], levels_order=1
-        )
-
-
-@pytest.mark.xfail(reason="parameter is deprecated.")
-def test_fill_value_wrong_type(df_checks_output):
-    """Raise TypeError if the wrong type is provided for `fill_value`."""
-    with pytest.raises(TypeError):
-        df_checks_output.pivot_wider(
-            index="name", names_from=["estimate", "variable"], fill_value={2}
-        )
-
-
-@pytest.mark.xfail(reason="parameter is deprecated.")
-def test_aggfunc_wrong_type(df_checks_output):
-    """Raise TypeError if the wrong type is provided for `aggfunc`."""
-    with pytest.raises(TypeError):
-        df_checks_output.pivot_wider(
-            index="name", names_from=["estimate", "variable"], aggfunc={2}
         )
 
 
@@ -184,7 +159,7 @@ def test_non_unique_index_names_from_combination():
         {"A": ["A", "A", "A"], "L": ["L", "L", "L"], "numbers": [30, 54, 25]}
     )
     with pytest.raises(ValueError):
-        df.pivot_wider(index="A", names_from="L")
+        df.pivot_wider(index="A", names_from="L", values_from="numbers")
 
 
 def test_pivot_long_wide_long():
@@ -213,7 +188,12 @@ def test_pivot_long_wide_long():
         ]
     )
 
-    result = df_in.pivot_wider(index=["a", "b"], names_from="name")
+    result = df_in.pivot_wider(
+        index=["a", "b"],
+        names_from="name",
+        values_from=["points", "marks", "sets"],
+        names_sep=None,
+    )
 
     result = result.pivot_longer(
         index=["a", "b"],
@@ -223,27 +203,24 @@ def test_pivot_long_wide_long():
     assert_frame_equal(result, df_in)
 
 
-@pytest.mark.xfail(reason="doesnt match, since pivot implicitly sorts")
 def test_pivot_wide_long_wide():
     """
     Test that transformation from pivot_longer to wider and
     back to longer returns the same source dataframe.
     """
+    # pivot implicitly sorts
+    # hence the need for ordered categorical
     df = pd.DataFrame(
         {
             "name": ["Wilbur", "Petunia", "Gregory"],
             "a": [67, 80, 64],
             "b": [56, 90, 50],
         }
-    )
+    ).encode_categorical(name="appearance")
 
     result = df.pivot_longer(
         column_names=["a", "b"], names_to="drug", values_to="heartrate"
-    )
-
-    result = result.pivot_wider(
-        index="name", names_from="drug", values_from="heartrate"
-    )
+    ).pivot_wider(index="name", names_from="drug", values_from="heartrate")
 
     assert_frame_equal(result, df)
 
@@ -274,7 +251,6 @@ def test_flatten_levels_false():
     assert_frame_equal(
         result,
         expected_output,
-        # check_dtype=False,
     )
 
 
@@ -285,17 +261,22 @@ def test_no_index():
             "gender": ["Male", "Female", "Female", "Male", "Male"],
             "contVar": [22379, 24523, 23421, 23831, 29234],
         },
-        index=pd.Int64Index([0, 0, 1, 1, 2], dtype="int64"),
+        index=[0, 0, 1, 1, 2],
     )
 
     expected_output = pd.DataFrame(
         {
-            "contVar_Female": [24523.0, 23421.0, np.nan],
-            "contVar_Male": [22379.0, 23831.0, 29234.0],
+            "Female": [24523.0, 23421.0, np.nan],
+            "Male": [22379.0, 23831.0, 29234.0],
         }
     )
 
-    result = df_in.pivot_wider(names_from="gender")
+    result = (
+        df_in.reset_index()
+        .pivot_wider(names_from="gender", values_from="contVar", index="index")
+        .set_index("index")
+        .rename_axis(index=None)
+    )
 
     assert_frame_equal(result, expected_output)
 
@@ -307,18 +288,22 @@ def test_no_index_names_from_order():
             "gender": ["Male", "Female", "Female", "Male", "Male"],
             "contVar": [22379, 24523, 23421, 23831, 29234],
         },
-        index=pd.Int64Index([0, 0, 1, 1, 2], dtype="int64"),
+        index=[0, 0, 1, 1, 2],
     )
 
     expected_output = pd.DataFrame(
         {
-            "contVar_Male": [22379.0, 23831.0, 29234.0],
-            "contVar_Female": [24523.0, 23421.0, np.nan],
+            "Male": [22379.0, 23831.0, 29234.0],
+            "Female": [24523.0, 23421.0, np.nan],
         }
     )
 
-    result = df_in.encode_categorical(gender=(None, "appearance")).pivot_wider(
-        names_from="gender"
+    result = (
+        df_in.encode_categorical(gender="appearance")
+        .reset_index()
+        .pivot_wider(names_from="gender", values_from="contVar", index="index")
+        .set_index("index")
+        .rename_axis(index=None)
     )
 
     assert_frame_equal(result, expected_output)
@@ -348,13 +333,38 @@ def test_index_names():
     assert_frame_equal(result, expected_output)
 
 
+def test_categorical():
+    """Test output for categorical column"""
+    df_in = pd.DataFrame(
+        {
+            "family": ["Kelly", "Kelly", "Quin", "Quin"],
+            "name": ["Mark", "Scott", "Tegan", "Sara"],
+            "n": pd.Categorical([1, 2, 1, 2]),
+        }
+    )
+    df_out = pd.DataFrame(
+        {
+            "family": ["Kelly", "Quin"],
+            1: ["Mark", "Tegan"],
+            2: ["Scott", "Sara"],
+        }
+    )
+
+    result = df_in.pivot_wider(
+        index="family",
+        names_from="n",
+        values_from="name",
+    )
+    assert_frame_equal(result, df_out)
+
+
 def test_names_glue():
     """Test output with `names_glue`"""
     df_in = pd.DataFrame(
         {
             "family": ["Kelly", "Kelly", "Quin", "Quin"],
             "name": ["Mark", "Scott", "Tegan", "Sara"],
-            "n": [1, 2, 1, 2],
+            "n": ["1", "2", "1", "2"],
         }
     )
     df_out = pd.DataFrame(
@@ -369,30 +379,16 @@ def test_names_glue():
         index="family",
         names_from="n",
         values_from="name",
-        names_glue=lambda col: f"name{col}",
+        names_glue="name{n}",
     )
     assert_frame_equal(result, df_out)
 
 
-def test_change_level_order():
+def test_names_glue_multiple_levels(df_checks_output):
     """
-    Test output with `levels_order`,
-    while maintaining order from `names_from`.
+    Test output with names_glue for multiple levels.
     """
-    df_in = pd.DataFrame(
-        {
-            "geoid": [1, 1, 13, 13],
-            "name": ["Alabama", "Alabama", "Georgia", "Georgia"],
-            "variable": [
-                "pop_renter",
-                "median_rent",
-                "pop_renter",
-                "median_rent",
-            ],
-            "estimate": [1434765, 747, 3592422, 927],
-            "error": [16736, 3, 33385, 3],
-        }
-    )
+
     df_out = pd.DataFrame(
         {
             "geoid": [1, 13],
@@ -404,13 +400,37 @@ def test_change_level_order():
         }
     )
 
-    result = df_in.encode_categorical(
-        variable=(None, "appearance")
+    result = df_checks_output.encode_categorical(
+        variable="appearance"
     ).pivot_wider(
         index=["geoid", "name"],
         names_from="variable",
         values_from=["estimate", "error"],
-        levels_order=["variable", None],
+        names_glue="{variable}_{_value}",
+        reset_index=False,
+    )
+    assert_frame_equal(result, df_out.set_index(["geoid", "name"]))
+
+
+def test_names_glue_single_column(df_checks_output):
+    """
+    Test names_glue for single column.
+    """
+
+    df_out = (
+        df_checks_output.pivot(
+            index=["geoid", "name"], columns="variable", values="estimate"
+        )
+        .add_suffix("_estimate")
+        .rename_axis(columns=None)
+        .reset_index()
+    )
+
+    result = df_checks_output.pivot_wider(
+        index=slice("geoid", "name"),
+        names_from="variable",
+        values_from="estimate",
+        names_glue="{variable}_estimate",
     )
     assert_frame_equal(result, df_out)
 
@@ -444,3 +464,212 @@ def test_int_columns():
     )
 
     assert_frame_equal(result, df_out)
+
+
+@pytest.fixture
+def df_expand():
+    """pytest fixture"""
+    # adapted from
+    # https://github.com/tidyverse/tidyr/issues/770#issuecomment-993872495
+    return pd.DataFrame(
+        dict(
+            id=pd.Categorical(
+                values=(2, 1, 1, 2, 1), categories=(1, 2, 3), ordered=True
+            ),
+            year=(2018, 2018, 2019, 2020, 2020),
+            gender=pd.Categorical(
+                ("female", "male", "male", "female", "male")
+            ),
+            percentage=range(30, 80, 10),
+        ),
+        index=np.repeat([0], 5),
+    )
+
+
+def test_names_expand(df_expand):
+    """Test output if `names_expand`"""
+    actual = df_expand.pivot(
+        index="year", columns="id", values="percentage"
+    ).reindex(columns=pd.Categorical([1, 2, 3], ordered=True))
+    expected = df_expand.pivot_wider(
+        index="year",
+        names_from="id",
+        values_from="percentage",
+        names_expand=True,
+        flatten_levels=False,
+    )
+    assert_frame_equal(actual, expected, check_dtype=False)
+
+
+def test_names_expand_flatten_levels(df_expand):
+    """Test output if `names_expand`"""
+    actual = (
+        df_expand.pivot(index="year", columns="id", values="percentage")
+        .reindex(columns=[1, 2, 3])
+        .rename_axis(columns=None)
+        .reset_index()
+    )
+    expected = df_expand.pivot_wider(
+        index="year",
+        names_from="id",
+        values_from="percentage",
+        names_expand=True,
+        flatten_levels=True,
+    )
+    assert_frame_equal(actual, expected, check_dtype=False)
+
+
+def test_index_expand(df_expand):
+    """Test output if `index_expand`"""
+    actual = df_expand.pivot(
+        index="id", columns="year", values="percentage"
+    ).reindex(pd.Categorical([1, 2, 3], ordered=True))
+    expected = df_expand.pivot_wider(
+        index="id",
+        names_from="year",
+        values_from="percentage",
+        index_expand=True,
+        flatten_levels=False,
+    )
+    assert_frame_equal(actual, expected)
+
+
+def test_index_expand_flatten_levels(df_expand):
+    """Test output if `index_expand`"""
+    actual = (
+        df_expand.pivot(index="id", columns="year", values="percentage")
+        .reindex(pd.Categorical([1, 2, 3], ordered=True))
+        .rename_axis(columns=None)
+        .reset_index()
+    )
+    expected = df_expand.pivot_wider(
+        index="id",
+        names_from="year",
+        values_from="percentage",
+        index_expand=True,
+    )
+    assert_frame_equal(actual, expected)
+
+
+def test_expand_multiple_levels(df_expand):
+    """Test output for names_expand for multiple names_from."""
+    expected = df_expand.pivot_wider(
+        index="id",
+        names_from=["year", "gender"],
+        values_from="percentage",
+        names_expand=True,
+        flatten_levels=False,
+    ).loc[pd.unique(df_expand["id"])]
+    actual = (
+        df_expand.complete("year", "gender", "id")
+        .pivot(index="id", columns=("year", "gender"), values="percentage")
+        .loc[pd.unique(df_expand["id"])]
+    )
+    assert_frame_equal(actual, expected)
+
+
+def test_expand_multiple_levels_flatten_levels(df_expand):
+    """Test output for names_expand for multiple names_from."""
+    expected = df_expand.pivot_wider(
+        index="id",
+        names_from=["year", "gender"],
+        values_from="percentage",
+        names_expand=True,
+        flatten_levels=True,
+    )
+    actual = (
+        df_expand.complete("year", "gender", "id")
+        .pivot(index="id", columns=("year", "gender"), values="percentage")
+        .loc[pd.unique(expected["id"])]
+        .collapse_levels()
+        .reset_index()
+    )
+    assert_frame_equal(actual, expected)
+
+
+@pytest.fixture
+def multi():
+    """fixture for MultiIndex column"""
+    columns = pd.MultiIndex.from_tuples(
+        [("first", "extra"), ("second", "extra"), ("A", "cat")],
+        names=["exp", "animal"],
+    )
+
+    data = np.array(
+        [
+            ["bar", "one", 0.10771469563752678],
+            ["bar", "two", -0.6453410828562166],
+            ["baz", "one", 0.3210232406192864],
+            ["baz", "two", 2.010694653300755],
+        ],
+        dtype=object,
+    )
+
+    return pd.DataFrame(data, columns=columns)
+
+
+def test_multiindex_values_from_missing(multi):
+    """
+    Raise if df.columns is a MultiIndex,
+    values_from is a list of tuples,
+    and a tuple is missing
+    """
+    with pytest.raises(KeyError):
+        multi.pivot_wider(
+            names_from=[("second", "extra")], values_from=[("A", "ct")]
+        )
+
+
+def test_multiindex_index_missing(multi):
+    """
+    Raise if df.columns is a MultiIndex,
+    index is a list of tuples,
+    and a tuple is missing
+    """
+    with pytest.raises(KeyError):
+        multi.pivot_wider(
+            names_from=[("second", "extra")], index=[("first", "ext")]
+        )
+
+
+def test_multi_index_values_from_missing(multi):
+    """
+    Raise if df.columns is a MultiIndex,
+    values_from is a list of tuples,
+    and a tuple is missing
+    """
+    with pytest.raises(KeyError):
+        multi.pivot_wider(
+            names_from=[("sec", "extra")], values_from=[("A", "cat")]
+        )
+
+
+def test_values_from_is_None_index_is_not_None():
+    """
+    Test output if
+    index and names_from is provided,
+    and values_from is None
+    """
+    # https://github.com/pyjanitor-devs/pyjanitor/issues/1509
+    df = pd.DataFrame(
+        {
+            "subject": [1, 1, 1, 2, 2, 2, 2],
+            "pills": [4, 4, 2, 1, 1, 1, 3],
+            "date": [
+                "10/10/2012",
+                "10/11/2012",
+                "10/12/2012",
+                "1/6/2014",
+                "1/7/2014",
+                "1/7/2014",
+                "1/8/2014",
+            ],
+            "strength": [250, 250, 500, 1000, 250, 500, 250],
+        }
+    )
+
+    expected = df.pivot_wider(
+        index=["subject", "date"], names_from="strength", flatten_levels=False
+    )
+    actual = df.pivot(index=["subject", "date"], columns="strength")
+    assert_frame_equal(expected, actual)

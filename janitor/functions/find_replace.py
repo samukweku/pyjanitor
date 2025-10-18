@@ -1,76 +1,100 @@
-from typing import Dict
-import pandas_flavor as pf
+"""Implementation for find_replace."""
+
+from typing import Any, Dict
+
 import pandas as pd
+import pandas_flavor as pf
+
+from janitor.utils import refactored_function
 
 
 @pf.register_dataframe_method
+@refactored_function(
+    message=(
+        "This function will be deprecated in a 1.x release. "
+        "Please use `pd.DataFrame.replace` instead."
+    )
+)
 def find_replace(
-    df: pd.DataFrame, match: str = "exact", **mappings
+    df: pd.DataFrame, match: str = "exact", **mappings: Any
 ) -> pd.DataFrame:
-    """
-    Perform a find-and-replace action on provided columns.
+    """Perform a find-and-replace action on provided columns.
+
+    !!!note
+
+        This function will be deprecated in a 1.x release.
+        Please use `pd.DataFrame.replace` instead.
 
     Depending on use case, users can choose either exact, full-value matching,
     or regular-expression-based fuzzy matching
     (hence allowing substring matching in the latter case).
     For strings, the matching is always case sensitive.
 
-    For instance, given a DataFrame containing orders at a coffee shop:
+    Examples:
+        For instance, given a DataFrame containing orders at a coffee shop:
 
-    ```python
-        df = pd.DataFrame({
-            'customer': ['Mary', 'Tom', 'Lila'],
-            'order': ['ice coffee', 'lemonade', 'regular coffee']
-        })
-
-        df
-
-            customer         order
+        >>> df = pd.DataFrame({
+        ...     "customer": ["Mary", "Tom", "Lila"],
+        ...     "order": ["ice coffee", "lemonade", "regular coffee"]
+        ... })
+        >>> df
+          customer           order
         0     Mary      ice coffee
         1      Tom        lemonade
         2     Lila  regular coffee
-    ```
 
-    Our task is to replace values `ice coffee` and `regular coffee`
-    of the `order` column into `latte`.
+        Our task is to replace values `ice coffee` and `regular coffee`
+        of the `order` column into `latte`.
 
-    Example 1 for exact matching
+        Example 1 - exact matching (functional usage):
 
-    ```python
-        #Functional usage
-        df = find_replace(
-            df,
-            match='exact',
-            order={'ice coffee': 'latte', 'regular coffee': 'latte'},
-        )
-    ```
+        >>> df = find_replace(
+        ...     df,
+        ...     match="exact",
+        ...     order={"ice coffee": "latte", "regular coffee": "latte"},
+        ... )
+        >>> df
+          customer     order
+        0     Mary     latte
+        1      Tom  lemonade
+        2     Lila     latte
 
-    ```python
-        # Method chaining usage
-        df = df.find_replace(
-            match='exact'
-            order={'ice coffee': 'latte', 'regular coffee': 'latte'},
-        )
-    ```
+        Example 1 - exact matching (method chaining):
 
-    Example 2: Regular-expression-based matching
+        >>> df = df.find_replace(
+        ...     match="exact",
+        ...     order={"ice coffee": "latte", "regular coffee": "latte"},
+        ... )
+        >>> df
+          customer     order
+        0     Mary     latte
+        1      Tom  lemonade
+        2     Lila     latte
 
-    ```python
-        # Functional usage
-        df = find_replace(
-            df,
-            match='regex',
-            order={'coffee$': 'latte'},
-        )
-    ```
+        Example 2 - Regular-expression-based matching (functional usage):
 
-    ```python
-        # Method chaining usage
-        df = df.find_replace(
-            match='regex',
-            order={'coffee$': 'latte'},
-        )
-    ```
+        >>> df = find_replace(
+        ...     df,
+        ...     match='regex',
+        ...     order={'coffee$': 'latte'},
+        ... )
+        >>> df
+          customer     order
+        0     Mary     latte
+        1      Tom  lemonade
+        2     Lila     latte
+
+        Example 2 - Regular-expression-based matching (method chaining usage):
+
+        >>> df = df.find_replace(
+        ...     match='regex',
+        ...     order={'coffee$': 'latte'},
+        ... )
+        >>> df
+          customer     order
+        0     Mary     latte
+        1      Tom  lemonade
+        2     Lila     latte
 
     To perform a find and replace on the entire DataFrame,
     pandas' `df.replace()` function provides the appropriate functionality.
@@ -85,18 +109,21 @@ def find_replace(
     but `item name` would not be parsed correctly by the Python interpreter.
 
     If you have column names that might not be compatible,
-    we recommend calling on `clean_names()` as the first method call.
-    If, for whatever reason, that is not possible,
+    we recommend calling on [`clean_names()`][janitor.functions.clean_names.clean_names]
+    as the first method call. If, for whatever reason, that is not possible,
     then `_find_replace` is available as a function
     that you can do a pandas [pipe](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.pipe.html) call on.
 
-    :param df: A pandas DataFrame.
-    :param match: Whether or not to perform an exact match or not.
-        Valid values are "exact" or "regex".
-    :param mappings: keyword arguments corresponding to column names
-        that have dictionaries passed in indicating what to find (keys)
-        and what to replace with (values).
-    :returns: A pandas DataFrame with replaced values.
+    Args:
+        df: A pandas DataFrame.
+        match: Whether or not to perform an exact match or not.
+            Valid values are "exact" or "regex".
+        **mappings: keyword arguments corresponding to column names
+            that have dictionaries passed in indicating what to find (keys)
+            and what to replace with (values).
+
+    Returns:
+        A pandas DataFrame with replaced values.
     """  # noqa: E501
     for column_name, mapper in mappings.items():
         df = _find_replace(df, column_name, mapper, match=match)
@@ -115,19 +142,24 @@ def _find_replace(
     This implementation was kept
     because it has a number of validations that are quite useful.
 
-    :param df: A pandas DataFrame.
-    :param column_name: The column on which the find/replace action is to be
-        made. Must be a string.
-    :param mapper: A dictionary that maps
-        `thing to find` -> `thing to replace`.
-        Note: Does not support null-value replacement.
-    :param match: A string that dictates whether exact match or
-        regular-expression-based fuzzy match will be used for finding patterns.
-        Default to `exact`. Can only be `exact` or `regex`.
-    :returns: A pandas DataFrame.
-    :raises ValueError: is trying to use null replacement. Kindly use
-        `.fillna()` instead.
-    :raises ValueError: if `match` is not one of `exact` or `regex`.
+    Args:
+        df: A pandas DataFrame.
+        column_name: The column on which the find/replace action is to be
+            made. Must be a string.
+        mapper: A dictionary that maps
+            `thing to find` -> `thing to replace`.
+            Note: Does not support null-value replacement.
+        match: A string that dictates whether exact match or
+            regular-expression-based fuzzy match will be used for finding
+            patterns. Default to `exact`. Can only be `exact` or `regex`.
+
+    Raises:
+        ValueError: Is trying to use null replacement. Kindly use
+            `.fillna()` instead.
+        ValueError: If `match` is not one of `exact` or `regex`.
+
+    Returns:
+        A pandas DataFrame.
     """
     if any(map(pd.isna, mapper.keys())):
         raise ValueError(

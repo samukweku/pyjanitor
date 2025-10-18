@@ -1,14 +1,10 @@
-"""
-Engineering-specific data cleaning functions.
-"""
+"""Engineering-specific data cleaning functions."""
 
 import numpy as np
 import pandas as pd
 import pandas_flavor as pf
 
-
 from .utils import check, import_message
-
 
 try:
     import unyt
@@ -29,41 +25,7 @@ def convert_units(
     to_units: str = None,
     dest_column_name: str = None,
 ) -> pd.DataFrame:
-    """
-    Converts a column of numeric values from one unit to another.
-
-    Functional usage example:
-
-    ```python
-    import pandas as pd
-    import janitor.engineering
-
-    df = pd.DataFrame(...)
-
-    df = janitor.engineering.convert_units(
-        df=df,
-        column_name='temp_F',
-        existing_units='degF',
-        to_units='degC',
-        dest_column_name='temp_C'
-    )
-    ```
-
-    Method chaining usage example:
-
-    ```python
-    import pandas as pd
-    import janitor.engineering
-
-    df = pd.DataFrame(...)
-
-    df = df.convert_units(
-        column_name='temp_F',
-        existing_units='degF',
-        to_units='degC',
-        dest_column_name='temp_C'
-    )
-    ```
+    """Converts a column of numeric values from one unit to another.
 
     Unit conversion can only take place if the `existing_units` and
     `to_units` are of the same type (e.g., temperature or pressure).
@@ -76,17 +38,37 @@ def convert_units(
     a volume in cubic centimeters can be converted to cubic meters using
     `existing_units='cm**3'` and `to_units='m**3'`.
 
-    **Note**: This method mutates the original DataFrame.
+    This method mutates the original DataFrame.
 
-    :param df: A pandas DataFrame.
-    :param column_name: Name of the column containing numeric
-        values that are to be converted from one set of units to another.
-    :param existing_units: The unit type to convert from.
-    :param to_units: The unit type to convert to.
-    :param dest_column_name: The name of the new column containing the
-        converted values that will be created.
-    :returns: A pandas DataFrame with a new column of unit-converted values.
-    :raises TypeError: if column is not numeric.
+    Examples:
+        >>> import pandas as pd
+        >>> import janitor.engineering
+        >>> df = pd.DataFrame({"temp_F": [-40, 112]})
+        >>> df = df.convert_units(
+        ...     column_name='temp_F',
+        ...     existing_units='degF',
+        ...     to_units='degC',
+        ...     dest_column_name='temp_C'
+        ... )
+        >>> df
+           temp_F     temp_C
+        0     -40 -40.000000
+        1     112  44.444444
+
+    Args:
+        df: A pandas DataFrame.
+        column_name: Name of the column containing numeric
+            values that are to be converted from one set of units to another.
+        existing_units: The unit type to convert from.
+        to_units: The unit type to convert to.
+        dest_column_name: The name of the new column containing the
+            converted values that will be created.
+
+    Raises:
+        TypeError: If column is not numeric.
+
+    Returns:
+        A pandas DataFrame with a new column of unit-converted values.
     """
 
     # Check all inputs are correct data type

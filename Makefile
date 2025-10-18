@@ -16,7 +16,7 @@ release:
 
 format:
 	@echo "Applying Black Python code formatting..."
-	black -l 79 .
+	pre-commit run black --all-files
 
 test:
 	@echo "Running test suite..."
@@ -24,11 +24,11 @@ test:
 
 lint:
 	@echo "Checking code formatting..."
-	flake8 . --exclude "./nbconvert_config.py, ./env, ./venv ./build"
+	pre-commit run flake8 --all-files
 
 docs:
 	@echo "Building documentation..."
-	cd docs && make html
+	mkdocs build
 
 isort:
 	@echo "Sorting imports..."
@@ -52,3 +52,8 @@ install:
 
 	@echo "Installing pre-commit hooks"
 	$(ACTIVATE) && pre-commit install
+
+compile-requirements:
+	@echo "pip-compiling requirements files..."
+	find .requirements -type f -name '*.in' | xargs -I {} sh -c\
+		'echo "compiling" {} && pip-compile {} --upgrade -q'

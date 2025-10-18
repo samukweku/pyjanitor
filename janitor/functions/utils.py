@@ -1,27 +1,45 @@
 """Utility functions for all of the functions submodule."""
-from itertools import chain
-import fnmatch
 
-from collections.abc import Callable as dispatch_callable
+from __future__ import annotations
+
 import re
-from typing import Hashable, Iterable, List, Optional, Pattern, Union
-
-import pandas as pd
-from janitor.utils import check, _expand_grid
-from pandas.api.types import (
-    union_categoricals,
-    is_scalar,
-    is_extension_array_dtype,
-    is_list_like,
+import unicodedata
+import warnings
+from enum import Enum
+from typing import (
+    Any,
+    Hashable,
+    Iterable,
+    List,
+    Optional,
+    Pattern,
+    Union,
 )
+
 import numpy as np
+import pandas as pd
 from multipledispatch import dispatch
-from janitor.utils import check_column
-import functools
+from pandas.api.types import (
+    is_list_like,
+    is_scalar,
+    is_string_dtype,
+    union_categoricals,
+)
+
+from janitor.errors import JanitorError
+from janitor.utils import (
+    _expand_grid,
+    check,
+    check_column,
+    find_stack_level,
+)
+
+warnings.simplefilter("always", DeprecationWarning)
 
 
 def unionize_dataframe_categories(
-    *dataframes, column_names: Optional[Iterable[pd.CategoricalDtype]] = None
+    *dataframes: Any,
+    column_names: Optional[Iterable[pd.CategoricalDtype]] = None,
 ) -> List[pd.DataFrame]:
     """
     Given a group of dataframes which contain some categorical columns, for
@@ -39,29 +57,35 @@ def unionize_dataframe_categories(
     `object`, losing out on dramatic speed gains you get from the former
     format.
 
-    Usage example for concatenation of categorical column-containing
-    dataframes:
+    Examples:
+        Usage example for concatenation of categorical column-containing
+        dataframes:
 
-    Instead of:
+        Instead of:
 
-    ```python
-    concatenated_df = pd.concat([df1, df2, df3], ignore_index=True)
-    ```
+        ```python
+        concatenated_df = pd.concat([df1, df2, df3], ignore_index=True)
+        ```
 
-    which in your case has resulted in `category` -> `object` conversion,
-    use:
+        which in your case has resulted in `category` -> `object` conversion,
+        use:
 
-    ```python
-    unionized_dataframes = unionize_dataframe_categories(df1, df2, df2)
-    concatenated_df = pd.concat(unionized_dataframes, ignore_index=True)
-    ```
+        ```python
+        unionized_dataframes = unionize_dataframe_categories(df1, df2, df2)
+        concatenated_df = pd.concat(unionized_dataframes, ignore_index=True)
+        ```
 
-    :param dataframes: The dataframes you wish to unionize the categorical
-        objects for.
-    :param column_names: If supplied, only unionize this subset of columns.
-    :returns: A list of the category-unioned dataframes in the same order they
-        were provided.
-    :raises TypeError: If any of the inputs are not pandas DataFrames.
+    Args:
+        *dataframes: The dataframes you wish to unionize the categorical
+            objects for.
+        column_names: If supplied, only unionize this subset of columns.
+
+    Raises:
+        TypeError: If any of the inputs are not pandas DataFrames.
+
+    Returns:
+        A list of the category-unioned dataframes in the same order they
+            were provided.
     """
 
     if any(not isinstance(df, pd.DataFrame) for df in dataframes):
@@ -114,30 +138,39 @@ def unionize_dataframe_categories(
 
 
 def patterns(regex_pattern: Union[str, Pattern]) -> Pattern:
-    """
-    This function converts a string into a compiled regular expression;
-    it can be used to select columns in the index or columns_names
+    """This function converts a string into a compiled regular expression.
+
+    It can be used to select columns in the index or columns_names
     arguments of `pivot_longer` function.
 
-    :param regex_pattern: string to be converted to compiled regular
-        expression.
-    :returns: A compile regular expression from provided
-        `regex_pattern`.
+    !!!warning
+
+        This function is deprecated. Kindly use `re.compile` instead.
+
+    Args:
+        regex_pattern: String to be converted to compiled regular
+            expression.
+
+    Returns:
+        A compile regular expression from provided `regex_pattern`.
     """
+    warnings.warn(
+        "This function is deprecated. Kindly use `re.compile` instead.",
+        DeprecationWarning,
+        stacklevel=find_stack_level(),
+    )
     check("regular expression", regex_pattern, [str, Pattern])
 
     return re.compile(regex_pattern)
 
 
-def _computations_expand_grid(others: dict) -> pd.DataFrame:
+def _computations_expand_grid(others: dict) -> dict:
     """
     Creates a cartesian product of all the inputs in `others`.
-    Combines NumPy's `mgrid`, with the `take` method in NumPy/pandas
-    to expand each input to the length of the cumulative product of
-    all inputs in `others`.
+    Uses numpy's `mgrid` to generate indices, which is used to
+    `explode` all the inputs in `others`.
 
     There is a performance penalty for small entries
-    (lenght less than 10)
     in using this method, instead of `itertools.product`;
     however, there are significant performance benefits
     as the size of the data increases.
@@ -147,7 +180,7 @@ def _computations_expand_grid(others: dict) -> pd.DataFrame:
     This is particularly relevant for pandas' extension arrays `dtypes`
     (categoricals, nullable integers, ...).
 
-    A DataFrame of all possible combinations is returned.
+    A dictionary of all possible combinations is returned.
     """
 
     for key in others:
@@ -157,13 +190,11 @@ def _computations_expand_grid(others: dict) -> pd.DataFrame:
 
     for key, value in others.items():
         if is_scalar(value):
-            value = pd.DataFrame([value])
-        elif (not isinstance(value, pd.Series)) and is_extension_array_dtype(
-            value
-        ):
-            value = pd.DataFrame(value)
+            value = np.asarray([value])
         elif is_list_like(value) and (not hasattr(value, "shape")):
             value = np.asarray([*value])
+        if not value.size:
+            raise ValueError(f"Kindly provide a non-empty array for {key}.")
 
         grid[key] = value
 
@@ -173,20 +204,28 @@ def _computations_expand_grid(others: dict) -> pd.DataFrame:
     # to generate cartesian indices
     # which is then paired with grid.items()
     # to blow up each individual value
-    # before finally recombining, via pd.concat,
-    # to create a dataframe.
-    grid_index = [slice(len(value)) for _, value in grid.items()]
-    grid_index = np.mgrid[grid_index]
-    grid_index = map(np.ravel, grid_index)
-    grid = zip(grid.items(), grid_index)
+    # before creating the final DataFrame.
+    grid = grid.items()
+    grid_index = [slice(len(value)) for _, value in grid]
+    grid_index = map(np.ravel, np.mgrid[grid_index])
+    grid = zip(grid, grid_index)
     grid = ((*left, right) for left, right in grid)
-    grid = {
-        key: _expand_grid(value, grid_index) for key, value, grid_index in grid
-    }
-
-    # creates a MultiIndex with the keys
-    # since grid is a dictionary
-    return pd.concat(grid, axis="columns", sort=False, copy=False)
+    contents = {}
+    for key, value, grid_index in grid:
+        contents.update(_expand_grid(value, grid_index, key))
+    # check length of keys and pad if necessary
+    lengths = set(map(len, contents))
+    if len(lengths) > 1:
+        lengths = max(lengths)
+        others = {}
+        for key, value in contents.items():
+            len_key = len(key)
+            if len_key < lengths:
+                padding = [""] * (lengths - len_key)
+                key = (*key, *padding)
+            others[key] = value
+        return others
+    return contents
 
 
 @dispatch(pd.DataFrame, (list, tuple), str)
@@ -204,241 +243,603 @@ def _factorize(df, column_name, suffix, **kwargs):  # noqa: F811
     return df
 
 
-@functools.singledispatch
-def _select_column_names(columns_to_select, df):
+class _JoinOperator(Enum):
     """
-    base function for column selection.
-    Returns a list of column names.
+    List of operators used in conditional_join.
     """
-    raise TypeError("This type is not supported in column selection.")
+
+    GREATER_THAN = ">"
+    LESS_THAN = "<"
+    GREATER_THAN_OR_EQUAL = ">="
+    LESS_THAN_OR_EQUAL = "<="
+    STRICTLY_EQUAL = "=="
+    NOT_EQUAL = "!="
 
 
-# hack to get it to recognize typing.Pattern
-# functools.singledispatch does not natively
-# recognize types from the typing module
-# `type(re.compile(r"\d+"))` returns re.Pattern
-# which is a type and functools.singledispatch
-# accepts it without drama;
-# however, the same type from typing.Pattern
-# is not accepted.
-@_select_column_names.register(type(re.compile(r"\d+")))  # noqa: F811
-def _column_sel_dispatch(columns_to_select, df):  # noqa: F811
+less_than_join_types = {
+    _JoinOperator.LESS_THAN.value,
+    _JoinOperator.LESS_THAN_OR_EQUAL.value,
+}
+greater_than_join_types = {
+    _JoinOperator.GREATER_THAN.value,
+    _JoinOperator.GREATER_THAN_OR_EQUAL.value,
+}
+
+
+def _null_checks_cond_join(
+    left: pd.Series, right: pd.Series
+) -> Union[tuple, None]:
     """
-    Base function for column selection.
-    Applies only to regular expressions.
-    `re.compile` is required for the regular expression.
-    A list of column names is returned.
+    Checks for nulls in the arrays before conducting binary search.
+
+    Relevant to _less_than_indices and _greater_than_indices
     """
-    df_columns = df.columns
-    filtered_columns = [
-        column_name
-        for column_name in df_columns
-        if re.search(columns_to_select, column_name)
+    any_nulls = left.isna()
+    if any_nulls.all():
+        return None
+    if any_nulls.any():
+        left = left[~any_nulls]
+    any_nulls = right.isna()
+    if any_nulls.all():
+        return None
+    if any_nulls.any():
+        right = right[~any_nulls]
+    any_nulls = any_nulls.any()
+    right_is_sorted = right.is_monotonic_increasing
+    if not right_is_sorted:
+        right = right.sort_values(kind="stable")
+
+    left_index = left.index._values
+    left = left._values
+    right_index = right.index._values
+    right = right._values
+
+    return left, right, left_index, right_index, right_is_sorted, any_nulls
+
+
+def _equal_indices(
+    left: pd.Series,
+    right: pd.Series,
+    return_ragged_arrays: bool,
+    row_count: Hashable = None,
+) -> tuple:
+    """
+    Use binary search to get indices where left
+    is equal to right.
+
+    A tuple of integer indexes
+    for left and right is returned.
+    """
+    outcome = _null_checks_cond_join(left=left, right=right)
+    if not outcome:
+        return None
+    left, right, left_index, right_index, right_is_sorted, any_nulls = outcome
+    # steal some perf here within the binary search
+    # search for uniques
+    # and later index them with left_positions
+    # it is assumed that users will only reach for this
+    # if the data is reasonably duplicated; if not
+    # pd.merge is superb especially if it's a one-to-one
+    # or one-to-many
+    positions, left = pd.factorize(left, sort=False)
+    if return_ragged_arrays:
+        starts = right.searchsorted(left, side="left")
+        starts = starts[positions]
+        ends = right.searchsorted(left, side="right")
+        ends = ends[positions]
+        booleans = starts < ends
+        if not booleans.any():
+            return None
+        if not booleans.all():
+            left_index = left_index[booleans]
+            starts = starts[booleans]
+            ends = ends[booleans]
+        right = [slice(start, end) for start, end in zip(starts, ends)]
+        if right_is_sorted & (not any_nulls):
+            return left_index, right
+        right = [right_index[slicer] for slicer in right]
+        return left_index, right
+    # necessary step to remove non matches in right
+    # vital to ensuring correct output in numba_equi_join
+    # when building the regions
+    booleans = pd.Index(left).get_indexer(right) != -1
+    if not booleans.any():
+        return None
+    if not booleans.all():
+        right_index = right_index[booleans]
+        right = right[booleans]
+    starts = right.searchsorted(left, side="left")
+    starts = starts[positions]
+    ends = right.searchsorted(left, side="right")
+    ends = ends[positions]
+    booleans = starts < ends
+    if not booleans.any():
+        return None
+    if not booleans.all():
+        left_index = left_index[booleans]
+        starts = starts[booleans]
+    if row_count:
+        return pd.Series(index=left_index, data=ends - starts, name=row_count)
+    return left_index, right_index, starts
+
+
+def _less_than_indices(
+    left: pd.Series,
+    right: pd.Series,
+    strict: bool,
+    multiple_conditions: bool,
+    keep: str,
+    return_ragged_arrays: bool,
+    row_count: Hashable = None,
+) -> tuple:
+    """
+    Use binary search to get indices where left
+    is less than or equal to right.
+
+    If strict is True, then only indices
+    where `left` is less than
+    (but not equal to) `right` are returned.
+
+    A tuple of integer indexes
+    for left and right is returned.
+    """
+
+    # no point going through all the hassle
+    if left.min() > right.max():
+        return None
+
+    outcome = _null_checks_cond_join(left=left, right=right)
+    if not outcome:
+        return None
+    left, right, left_index, right_index, right_is_sorted, any_nulls = outcome
+
+    search_indices = right.searchsorted(left, side="left")
+    # if any of the positions in `search_indices`
+    # is equal to the length of `right_keys`
+    # that means the respective position in `left`
+    # has no values from `right` that are less than
+    # or equal, and should therefore be discarded
+    len_right = right.size
+    booleans = search_indices < len_right
+
+    if not booleans.all():
+        left = left[booleans]
+        left_index = left_index[booleans]
+        search_indices = search_indices[booleans]
+
+    # the idea here is that if there are any equal values
+    # shift to the right to the immediate next position
+    # that is not equal
+    if strict:
+        booleans = left == right[search_indices]
+        # replace positions where rows are equal
+        # with positions from searchsorted('right')
+        # positions from searchsorted('right') will never
+        # be equal and will be the furthermost in terms of position
+        # example : right -> [2, 2, 2, 3], and we need
+        # positions where values are not equal for 2;
+        # the furthermost will be 3, and searchsorted('right')
+        # will return position 3.
+        if booleans.any():
+            replacements = right.searchsorted(left, side="right")
+            # now we can safely replace values
+            # with strictly less than positions
+            search_indices = np.where(booleans, replacements, search_indices)
+        # check again if any of the values
+        # have become equal to length of right
+        # and get rid of them
+        booleans = search_indices < len_right
+
+        if not booleans.all():
+            left_index = left_index[booleans]
+            search_indices = search_indices[booleans]
+
+        if not search_indices.size:
+            return None
+    if row_count:
+        return pd.Series(
+            index=left_index, data=len_right - search_indices, name=row_count
+        )
+    if multiple_conditions:
+        return left_index, right_index, search_indices
+    if right_is_sorted & (keep == "last"):
+        indexer = np.empty_like(search_indices)
+        indexer[:] = len_right - 1
+        return left_index, right_index[indexer]
+    if right_is_sorted & (keep == "first") & any_nulls:
+        return left_index, right_index[search_indices]
+    if right_is_sorted & (keep == "first"):
+        return left_index, search_indices
+    if return_ragged_arrays & right_is_sorted & (not any_nulls):
+        right = [slice(ind, len_right) for ind in search_indices]
+        return left_index, right
+    right = [right_index[ind:len_right] for ind in search_indices]
+    if return_ragged_arrays:
+        return left_index, right
+    if keep == "first":
+        right = [arr.min() for arr in right]
+        return left_index, right
+    if keep == "last":
+        right = [arr.max() for arr in right]
+        return left_index, right
+    right = np.concatenate(right)
+    left = left_index.repeat(len_right - search_indices)
+    return left, right
+
+
+def _greater_than_indices(
+    left: pd.Series,
+    right: pd.Series,
+    strict: bool,
+    multiple_conditions: bool,
+    keep: str,
+    return_ragged_arrays: bool,
+    row_count: Hashable = None,
+) -> tuple:
+    """
+    Use binary search to get indices where left
+    is greater than or equal to right.
+
+    If strict is True, then only indices
+    where `left` is greater than
+    (but not equal to) `right` are returned.
+
+    if multiple_conditions is False, a tuple of integer indexes
+    for left and right is returned;
+    else a tuple of the index for left, right, as well
+    as the positions of left in right is returned.
+    """
+
+    # quick break, avoiding the hassle
+    if left.max() < right.min():
+        return None
+
+    outcome = _null_checks_cond_join(left=left, right=right)
+    if not outcome:
+        return None
+    left, right, left_index, right_index, right_is_sorted, any_nulls = outcome
+    search_indices = right.searchsorted(left, side="right")
+    # if any of the positions in `search_indices`
+    # is equal to 0 (less than 1), it implies that
+    # left[position] is not greater than any value
+    # in right
+    booleans = search_indices > 0
+    if not booleans.all():
+        left = left[booleans]
+        left_index = left_index[booleans]
+        search_indices = search_indices[booleans]
+
+    # the idea here is that if there are any equal values
+    # shift downwards to the immediate next position
+    # that is not equal
+    if strict:
+        booleans = left == right[search_indices - 1]
+        # replace positions where rows are equal with
+        # searchsorted('left');
+        # this works fine since we will be using the value
+        # as the right side of a slice, which is not included
+        # in the final computed value
+        if booleans.any():
+            replacements = right.searchsorted(left, side="left")
+            # now we can safely replace values
+            # with strictly greater than positions
+            search_indices = np.where(booleans, replacements, search_indices)
+        # any value less than 1 should be discarded
+        # since the lowest value for binary search
+        # with side='right' should be 1
+        booleans = search_indices > 0
+        if not booleans.all():
+            left_index = left_index[booleans]
+            search_indices = search_indices[booleans]
+
+        if not search_indices.size:
+            return None
+    if row_count:
+        return pd.Series(index=left_index, data=search_indices, name=row_count)
+    if multiple_conditions:
+        return left_index, right_index, search_indices
+    if right_is_sorted & (keep == "first"):
+        indexer = np.zeros_like(search_indices)
+        return left_index, right_index[indexer]
+    if right_is_sorted & (keep == "last") & any_nulls:
+        return left_index, right_index[search_indices - 1]
+    if right_is_sorted & (keep == "last"):
+        return left_index, search_indices - 1
+    if return_ragged_arrays & right_is_sorted & (not any_nulls):
+        right = [slice(0, ind) for ind in search_indices]
+        return left_index, right
+    right = [right_index[:ind] for ind in search_indices]
+    if return_ragged_arrays:
+        return left_index, right
+    if keep == "first":
+        right = [arr.min() for arr in right]
+        return left_index, right
+    if keep == "last":
+        right = [arr.max() for arr in right]
+        return left_index, right
+    right = np.concatenate(right)
+    left = left_index.repeat(search_indices)
+    return left, right
+
+
+def _not_equal_indices(left: pd.Series, right: pd.Series, keep: str) -> tuple:
+    """
+    Use binary search to get indices where
+    `left` is exactly  not equal to `right`.
+
+    It is a combination of strictly less than
+    and strictly greater than indices.
+
+    A tuple of integer indexes for left and right
+    is returned.
+    """
+
+    dummy = np.array([], dtype=int)
+
+    # deal with nulls
+    l1_nulls = dummy
+    r1_nulls = dummy
+    l2_nulls = dummy
+    r2_nulls = dummy
+    any_left_nulls = left.isna()
+    any_right_nulls = right.isna()
+    if any_left_nulls.any():
+        l1_nulls = left.index[any_left_nulls.array]
+        l1_nulls = l1_nulls.to_numpy(copy=False)
+        r1_nulls = right.index
+        # avoid NAN duplicates
+        if any_right_nulls.any():
+            r1_nulls = r1_nulls[~any_right_nulls.array]
+        r1_nulls = r1_nulls.to_numpy(copy=False)
+        nulls_count = l1_nulls.size
+        # blow up nulls to match length of right
+        l1_nulls = np.tile(l1_nulls, r1_nulls.size)
+        # ensure length of right matches left
+        if nulls_count > 1:
+            r1_nulls = np.repeat(r1_nulls, nulls_count)
+    if any_right_nulls.any():
+        r2_nulls = right.index[any_right_nulls.array]
+        r2_nulls = r2_nulls.to_numpy(copy=False)
+        l2_nulls = left.index
+        nulls_count = r2_nulls.size
+        # blow up nulls to match length of left
+        r2_nulls = np.tile(r2_nulls, l2_nulls.size)
+        # ensure length of left matches right
+        if nulls_count > 1:
+            l2_nulls = np.repeat(l2_nulls, nulls_count)
+
+    l1_nulls = np.concatenate([l1_nulls, l2_nulls])
+    r1_nulls = np.concatenate([r1_nulls, r2_nulls])
+
+    outcome = _less_than_indices(
+        left,
+        right,
+        strict=True,
+        multiple_conditions=False,
+        keep=keep,
+        return_ragged_arrays=False,
+    )
+
+    if outcome is None:
+        lt_left = dummy
+        lt_right = dummy
+    else:
+        lt_left, lt_right = outcome
+
+    outcome = _greater_than_indices(
+        left,
+        right,
+        strict=True,
+        multiple_conditions=False,
+        keep=keep,
+        return_ragged_arrays=False,
+    )
+
+    if outcome is None:
+        gt_left = dummy
+        gt_right = dummy
+    else:
+        gt_left, gt_right = outcome
+
+    left = np.concatenate([lt_left, gt_left, l1_nulls])
+    right = np.concatenate([lt_right, gt_right, r1_nulls])
+
+    if (not left.size) & (not right.size):
+        return None
+    return _keep_output(keep, left, right)
+
+
+def _not_equal_row_count(
+    left: pd.Series, right: pd.Series, row_count: Hashable
+) -> tuple | None:
+    """
+    Get row count where
+    `left` is exactly  not equal to `right`.
+    """
+
+    null_count = pd.Series(
+        index=left.index, data=right.isna().sum(), name=row_count
+    )
+    null_count[left.isna()] += right.notna().sum()
+    outcome = _less_than_indices(
+        left,
+        right,
+        strict=True,
+        multiple_conditions=False,
+        keep="all",
+        return_ragged_arrays=False,
+        row_count=row_count,
+    )
+    if outcome is not None:
+        null_count = null_count.add(outcome, fill_value=0)
+    outcome = _greater_than_indices(
+        left,
+        right,
+        strict=True,
+        multiple_conditions=False,
+        keep="all",
+        return_ragged_arrays=False,
+        row_count=row_count,
+    )
+    if outcome is not None:
+        null_count = null_count.add(outcome, fill_value=0)
+    if not null_count.sum(axis=None):
+        return None
+    return null_count
+
+
+def _generic_func_cond_join(
+    left: pd.Series,
+    right: pd.Series,
+    op: str,
+    multiple_conditions: bool,
+    keep: str,
+    row_count: Hashable = None,
+    return_ragged_arrays: bool = False,
+) -> tuple:
+    """
+    Generic function to call any of the individual functions
+    (_less_than_indices, _greater_than_indices,
+    or _not_equal_indices).
+    """
+    strict = False
+
+    if op in {
+        _JoinOperator.GREATER_THAN.value,
+        _JoinOperator.LESS_THAN.value,
+        _JoinOperator.NOT_EQUAL.value,
+    }:
+        strict = True
+
+    if op in less_than_join_types:
+        return _less_than_indices(
+            left=left,
+            right=right,
+            strict=strict,
+            multiple_conditions=multiple_conditions,
+            keep=keep,
+            return_ragged_arrays=return_ragged_arrays,
+            row_count=row_count,
+        )
+    if op in greater_than_join_types:
+        return _greater_than_indices(
+            left=left,
+            right=right,
+            strict=strict,
+            multiple_conditions=multiple_conditions,
+            keep=keep,
+            return_ragged_arrays=return_ragged_arrays,
+            row_count=row_count,
+        )
+    if (op == _JoinOperator.NOT_EQUAL.value) and row_count:
+        return _not_equal_row_count(
+            left=left, right=right, row_count=row_count
+        )
+    if op == _JoinOperator.NOT_EQUAL.value:
+        return _not_equal_indices(left=left, right=right, keep=keep)
+    return _equal_indices(
+        left=left,
+        right=right,
+        return_ragged_arrays=return_ragged_arrays,
+        row_count=row_count,
+    )
+
+
+def _keep_output(keep: str, left: np.ndarray, right: np.ndarray):
+    """return indices for left and right index based on the value of `keep`."""
+    if keep == "all":
+        return left, right
+    grouped = pd.Series(right).groupby(left)
+    if keep == "first":
+        grouped = grouped.min()
+        return grouped.index, grouped._values
+    grouped = grouped.max()
+    return grouped.index, grouped._values
+
+
+def _change_case(
+    obj: str,
+    case_type: str,
+) -> str:
+    """Change case of obj."""
+    case_types = {"preserve", "upper", "lower", "snake"}
+    case_type = case_type.lower()
+    if case_type not in case_types:
+        raise JanitorError(f"type must be one of: {case_types}")
+
+    if case_type == "preserve":
+        return obj
+    if case_type == "upper":
+        return obj.upper()
+    if case_type == "lower":
+        return obj.lower()
+    # Implementation adapted from: https://gist.github.com/jaytaylor/3660565
+    # by @jtaylor
+    obj = re.sub(pattern=r"(.)([A-Z][a-z]+)", repl=r"\1_\2", string=obj)
+    obj = re.sub(pattern=r"([a-z0-9])([A-Z])", repl=r"\1_\2", string=obj)
+    return obj.lower()
+
+
+def _normalize_1(obj: str) -> str:
+    """Perform normalization of obj."""
+    FIXES = [(r"[ /:,?()\.-]", "_"), (r"['’]", ""), (r"[\xa0]", "_")]
+    for search, replace in FIXES:
+        obj = re.sub(pattern=search, repl=replace, string=obj)
+
+    return obj
+
+
+def _remove_special(
+    obj: str,
+) -> str:
+    """Remove special characters from obj."""
+    obj = [item for item in obj if item.isalnum() or (item == "_")]
+    return "".join(obj)
+
+
+def _strip_accents(
+    obj: str,
+) -> str:
+    """Remove accents from obj.
+
+    Inspired from [StackOverflow][so].
+
+    [so]: https://stackoverflow.com/questions/517923/what-is-the-best-way-to-remove-accents-in-a-python-unicode-strin
+    """  # noqa: E501
+
+    obj = [
+        letter
+        for letter in unicodedata.normalize("NFD", obj)
+        if not unicodedata.combining(letter)
     ]
-
-    if not filtered_columns:
-        raise KeyError("No column name matched the regular expression.")
-    df_columns = None
-
-    return filtered_columns
+    return "".join(obj)
 
 
-@_select_column_names.register(tuple)  # noqa: F811
-def _column_sel_dispatch(columns_to_select, df):  # noqa: F811
-    """
-    Base function for column selection.
-    This caters to columns that are of tuple type.
-    The tuple is returned as is, if it exists in the columns.
-    """
-    if columns_to_select not in df.columns:
-        raise KeyError(f"No match was returned for {columns_to_select}")
-    return columns_to_select
-
-
-@_select_column_names.register(list)  # noqa: F811
-def _column_sel_dispatch(columns_to_select, df):  # noqa: F811
-    """
-    Base function for column selection.
-    Applies only to list type.
-    It can take any of slice, str, callable, re.Pattern types,
-    or a combination of these types.
-    A tuple of column names is returned.
-    """
-
-    # takes care of boolean entries
-    if all(map(pd.api.types.is_bool, columns_to_select)):
-        if len(columns_to_select) != len(df.columns):
-            raise ValueError(
-                """
-                The length of the list of booleans
-                does not match the number of columns
-                in the dataframe.
-                """
-            )
-
-        return [*df.columns[columns_to_select]]
-
-    filtered_columns = []
-    columns_to_select = (
-        _select_column_names(entry, df) for entry in columns_to_select
-    )
-
-    # this is required,
-    # to maintain `tuple` status
-    # when combining all the entries into a single list
-    columns_to_select = (
-        [entry] if isinstance(entry, tuple) else entry
-        for entry in columns_to_select
-    )
-
-    columns_to_select = chain.from_iterable(columns_to_select)
-
-    # get rid of possible duplicates
-    for column_name in columns_to_select:
-        if column_name not in filtered_columns:
-            filtered_columns.append(column_name)
-
-    return filtered_columns
-
-
-@_select_column_names.register(str)  # noqa: F811
-def _column_sel_dispatch(columns_to_select, df):  # noqa: F811
-    """
-    Base function for column selection.
-    Applies only to strings.
-    It is also applicable to shell-like glob strings,
-    specifically, the `*`.
-    A list of column names is returned.
-    """
-    filtered_columns = None
-    df_columns = df.columns
-    if "*" in columns_to_select:  # shell-style glob string (e.g., `*_thing_*`)
-        filtered_columns = fnmatch.filter(df_columns, columns_to_select)
-    elif columns_to_select in df_columns:
-        filtered_columns = [columns_to_select]
-        return filtered_columns
-    if not filtered_columns:
-        raise KeyError(f"No match was returned for '{columns_to_select}'")
-    df_columns = None
-    return filtered_columns
-
-
-@_select_column_names.register(slice)  # noqa: F811
-def _column_sel_dispatch(columns_to_select, df):  # noqa: F811
-    """
-    Base function for column selection.
-    Applies only to slices.
-    The start slice value must be a string or None;
-    same goes for the stop slice value.
-    The step slice value should be an integer or None.
-    A slice, if passed correctly in a Multindex column,
-    returns a list of tuples across all levels of the
-    column.
-    A list of column names is returned.
-    """
-
-    df_columns = df.columns
-    filtered_columns = None
-    start_check = None
-    stop_check = None
-    step_check = None
-
-    if not df_columns.is_unique:
-        raise ValueError(
-            """
-            The column labels are not unique.
-            Kindly ensure the labels are unique
-            to ensure the correct output.
-            """
+def _strip_underscores_func(
+    obj: str,
+    strip_underscores: Union[str, bool] = None,
+) -> str:
+    """Strip underscores from obj."""
+    underscore_options = {None, "left", "right", "both", "l", "r", True}
+    if strip_underscores not in underscore_options:
+        raise JanitorError(
+            f"strip_underscores must be one of: {underscore_options}"
         )
 
-    start, stop, step = (
-        columns_to_select.start,
-        columns_to_select.stop,
-        columns_to_select.step,
-    )
-    start_check = any((start is None, isinstance(start, str)))
-    stop_check = any((stop is None, isinstance(stop, str)))
-    step_check = any((step is None, isinstance(step, int)))
-    if not start_check:
-        raise ValueError(
-            """
-            The start value for the slice
-            must either be a string or `None`.
-            """
-        )
-    if not stop_check:
-        raise ValueError(
-            """
-            The stop value for the slice
-            must either be a string or `None`.
-            """
-        )
-    if not step_check:
-        raise ValueError(
-            """
-            The step value for the slice
-            must either be an integer or `None`.
-            """
-        )
-    start_check = any((start is None, start in df_columns))
-    stop_check = any((stop is None, stop in df_columns))
-    if not start_check:
-        raise ValueError(
-            """
-            The start value for the slice must either be `None`
-            or exist in the dataframe's columns.
-            """
-        )
-    if not stop_check:
-        raise ValueError(
-            """
-            The stop value for the slice must either be `None`
-            or exist in the dataframe's columns.
-            """
-        )
-
-    if start is None:
-        start = 0
-    else:
-        start = df_columns.get_loc(start)
-    if stop is None:
-        stop = len(df_columns) + 1
-    else:
-        stop = df_columns.get_loc(stop)
-
-    if start > stop:
-        filtered_columns = df_columns[slice(stop, start + 1, step)][::-1]
-    else:
-        filtered_columns = df_columns[slice(start, stop + 1, step)]
-    df_columns = None
-    return [*filtered_columns]
+    if strip_underscores in {"left", "l"}:
+        return obj.lstrip("_")
+    if strip_underscores in {"right", "r"}:
+        return obj.rstrip("_")
+    if strip_underscores in {True, "both"}:
+        return obj.strip("_")
+    return obj
 
 
-@_select_column_names.register(dispatch_callable)  # noqa: F811
-def _column_sel_dispatch(columns_to_select, df):  # noqa: F811
+def _is_str_or_cat(index):
     """
-    Base function for column selection.
-    Applies only to callables.
-    The callable is applied to every column in the dataframe.
-    Either True or False is expected per column.
-    A list of column names is returned.
+    Check if the column/index is a string,
+    or categorical with strings.
     """
-    # the function will be applied per series.
-    # this allows filtration based on the contents of the series
-    # or based on the name of the series,
-    # which happens to be a column name as well.
-    # whatever the case may be,
-    # the returned values should be a sequence of booleans,
-    # with at least one True.
-
-    filtered_columns = df.agg(columns_to_select)
-
-    if not filtered_columns.any():
-        raise ValueError(
-            """
-            No match was returned for the provided callable.
-            """
-        )
-
-    return [*df.columns[filtered_columns]]
+    if isinstance(index.dtype, pd.CategoricalDtype):
+        return is_string_dtype(index.categories)
+    return is_string_dtype(index)

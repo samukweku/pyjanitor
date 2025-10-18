@@ -1,136 +1,125 @@
-from typing import Dict, Hashable
-import pandas_flavor as pf
-import pandas as pd
+"""Implementation of the `groupby_topk` function"""
 
-from janitor.utils import check_column
+from typing import Hashable, Union
+
+import pandas as pd
+import pandas_flavor as pf
+
+from janitor.utils import check, check_column, deprecated_alias
 
 
 @pf.register_dataframe_method
+@deprecated_alias(groupby_column_name="by", sort_column_name="column")
 def groupby_topk(
     df: pd.DataFrame,
-    groupby_column_name: Hashable,
-    sort_column_name: Hashable,
+    by: Union[list, Hashable],
+    column: Hashable,
     k: int,
-    sort_values_kwargs: Dict = None,
+    dropna: bool = True,
+    ascending: bool = True,
+    ignore_index: bool = True,
 ) -> pd.DataFrame:
-    """
-    Return top `k` rows from a groupby of a set of columns.
+    """Return top `k` rows from a groupby of a set of columns.
 
-    Returns a DataFrame that has the top `k` values grouped by `groupby_column_name`
-    and sorted by `sort_column_name`.
-    Additional parameters to the sorting (such as `ascending=True`)
-    can be passed using `sort_values_kwargs`.
+    Returns a DataFrame that has the top `k` values per `column`,
+    grouped by `by`. Under the hood it uses `nlargest/nsmallest`,
+    for numeric columns, which avoids sorting the entire dataframe,
+    and is usually more performant. For non-numeric columns, `pd.sort_values`
+    is used.
+    No sorting is done to the `by` column(s); the order is maintained
+    in the final output.
 
-    List of all sort_values() parameters can be found
-    [here](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.sort_values.html).
-
-
-    ```python
-        import pandas as pd
-        import janitor as jn
-
-           age  ID result
+    Examples:
+        >>> import pandas as pd
+        >>> import janitor
+        >>> df = pd.DataFrame(
+        ...     {
+        ...         "age": [20, 23, 22, 43, 21],
+        ...         "id": [1, 4, 6, 2, 5],
+        ...         "result": ["pass", "pass", "fail", "pass", "fail"],
+        ...     }
+        ... )
+        >>> df
+           age  id result
         0   20   1   pass
-        1   22   2   fail
-        2   24   3   pass
-        3   23   4   pass
+        1   23   4   pass
+        2   22   6   fail
+        3   43   2   pass
         4   21   5   fail
-        5   22   6   pass
-    ```
 
-    Ascending top 3:
+        Ascending top 3:
 
-    ```python
-        df.groupby_topk('result', 'age', 3)
+        >>> df.groupby_topk(by="result", column="age", k=3)
+           age  id result
+        0   20   1   pass
+        1   23   4   pass
+        2   43   2   pass
+        3   21   5   fail
+        4   22   6   fail
 
-                    age  ID result
-        result
-        fail    4   21   5   fail
-                1   22   2   fail
-        pass    0   20   1   pass
-                5   22   6   pass
-                3   23   4   pass
-    ```
+        Descending top 2:
 
-    Descending top 2:
+        >>> df.groupby_topk(
+        ...     by="result", column="age", k=2, ascending=False, ignore_index=False
+        ... )
+           age  id result
+        3   43   2   pass
+        1   23   4   pass
+        2   22   6   fail
+        4   21   5   fail
 
-    ```python
-        df.groupby_topk('result', 'age', 2, {'ascending':False})
+    Args:
+        df: A pandas DataFrame.
+        by: Column name(s) to group input DataFrame `df` by.
+        column: Name of the column that determines `k` rows
+            to return.
+        k: Number of top rows to return for each group.
+        dropna: If `True`, and `NA` values exist in `by`, the `NA`
+            values are not used in the groupby computation to get the relevant
+            `k` rows. If `False`, and `NA` values exist in `by`, then the `NA`
+            values are used in the groupby computation to get the relevant
+            `k` rows.
+        ascending: If `True`, the smallest top `k` rows,
+            determined by `column` are returned; if `False, the largest top `k`
+            rows, determined by `column` are returned.
+        ignore_index: If `True`, the original index is ignored.
+            If `False`, the original index for the top `k` rows is retained.
 
-                    age  ID result
-        result
-        fail    1   22   2   fail
-                4   21   5   fail
-        pass    2   24   3   pass
-                3   23   4   pass
-    ```
+    Raises:
+        ValueError: If `k` is less than 1.
 
-    Functional usage syntax:
-
-    ```python
-        import pandas as pd
-        import janitor as jn
-
-        df = pd.DataFrame(...)
-        df = jn.groupby_topk(
-            df = df,
-            groupby_column_name = 'groupby_column',
-            sort_column_name = 'sort_column',
-            k = 5
-            )
-    ```
-
-    Method-chaining usage syntax:
-
-    ```python
-        import pandas as pd
-        import janitor as jn
-
-        df = (
-            pd.DataFrame(...)
-            .groupby_topk(
-            df = df,
-            groupby_column_name = 'groupby_column',
-            sort_column_name = 'sort_column',
-            k = 5
-            )
-        )
-    ```
-
-    :param df: A pandas DataFrame.
-    :param groupby_column_name: Column name to group input DataFrame `df` by.
-    :param sort_column_name: Name of the column to sort along the
-        input DataFrame `df`.
-    :param k: Number of top rows to return from each group after sorting.
-    :param sort_values_kwargs: Arguments to be passed to sort_values function.
-    :returns: A pandas DataFrame with top `k` rows that are grouped by
-        `groupby_column_name` column with each group sorted along the
-        column `sort_column_name`.
-    :raises ValueError: if `k` is less than 1.
-    :raises ValueError: if `groupby_column_name` not in DataFrame `df`.
-    :raises ValueError: if `sort_column_name` not in DataFrame `df`.
-    :raises KeyError: if `inplace:True` is present in `sort_values_kwargs`.
+    Returns:
+        A pandas DataFrame with top `k` rows per `column`, grouped by `by`.
     """  # noqa: E501
 
-    # Convert the default sort_values_kwargs from None to empty Dict
-    sort_values_kwargs = sort_values_kwargs or {}
+    if isinstance(by, Hashable):
+        by = [by]
 
-    # Check if groupby_column_name and sort_column_name exists in the DataFrame
-    check_column(df, [groupby_column_name, sort_column_name])
+    check("by", by, [Hashable, list])
 
-    # Check if k is greater than 0.
+    check_column(df, [column])
+    check_column(df, by)
+
     if k < 1:
         raise ValueError(
-            "Numbers of rows per group to be returned must be greater than 0."
+            "Numbers of rows per group "
+            "to be returned must be greater than 0."
         )
 
-    # Check if inplace:True in sort values kwargs because it returns None
-    if (
-        "inplace" in sort_values_kwargs.keys()
-        and sort_values_kwargs["inplace"]
-    ):
-        raise KeyError("Cannot use `inplace=True` in `sort_values_kwargs`.")
+    indices = df.groupby(by=by, dropna=dropna, sort=False, observed=True)
+    indices = indices[column]
 
-    return df.groupby(groupby_column_name).apply(
-        lambda d: d.sort_values(sort_column_name, **sort_values_kwargs).head(k)
-    )
+    try:
+        if ascending:
+            indices = indices.nsmallest(n=k)
+        else:
+            indices = indices.nlargest(n=k)
+    except TypeError:
+        indices = indices.apply(
+            lambda d: d.sort_values(ascending=ascending).head(k)
+        )
+
+    indices = indices.index.get_level_values(-1)
+    if ignore_index:
+        return df.loc[indices].reset_index(drop=True)
+    return df.loc[indices]

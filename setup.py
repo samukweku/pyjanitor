@@ -1,4 +1,5 @@
 """Setup script."""
+
 import codecs
 import os
 import re
@@ -16,17 +17,19 @@ def read(*parts):
 
 
 def read_requirements(*parts):
-    """
-    Return requirements from parts.
+    """Return requirements from parts.
 
     Given a requirements.txt (or similar style file),
     returns a list of requirements.
     Assumes anything after a single '#' on a line is a comment, and ignores
     empty lines.
 
-    :param parts: list of filenames which contain the installation "parts",
-        i.e. submodule-specific installation requirements
-    :returns: A compiled list of requirements.
+    Args:
+        parts: List of filenames which contain the installation "parts",
+            i.e. submodule-specific installation requirements
+
+    Returns:
+        A compiled list of requirements.
     """
     requirements = []
     for line in read(*parts).splitlines():
@@ -68,7 +71,7 @@ EXTRA_REQUIRES = {
 
 # add 'all' key to EXTRA_REQUIRES
 all_requires = []
-for k, v in EXTRA_REQUIRES.items():
+for _, v in EXTRA_REQUIRES.items():
     all_requires.extend(v)
 EXTRA_REQUIRES["all"] = set(all_requires)
 
@@ -80,15 +83,17 @@ pprint(EXTRA_REQUIRES)
 
 
 def generate_long_description() -> str:
-    """
-    Extra chunks from README for PyPI description.
+    """Extra chunks from README for PyPI description.
 
-    Target chunks must be contained within `.. pypi-doc` pair comments,
+    Target chunks must be contained within `<!-- pypi-doc -->` pair comments,
     so there must be an even number of comments in README.
 
-    :returns: Extracted description from README.
-    :raises Exception: if odd number of `.. pypi-doc` comments
-        in README.
+    Raises:
+        Exception: If odd number of `<!-- pypi-doc -->` comments
+            in README.
+
+    Returns:
+        Extracted description from README.
     """
     # Read the contents of README file
     this_directory = Path(__file__).parent
@@ -96,14 +101,15 @@ def generate_long_description() -> str:
         readme = f.read()
 
     # Find pypi-doc comments in README
-    indices = [m.start() for m in re.finditer(".. pypi-doc", readme)]
+    boundary = r"<!-- pypi-doc -->"
+    indices = [m.start() for m in re.finditer(boundary, readme)]
     if len(indices) % 2 != 0:
-        raise Exception("Odd number of `.. pypi-doc` comments in README")
+        raise Exception(f"Odd number of `{boundary}` comments in README")
 
     # Loop through pairs of comments and save text between pairs
     long_description = ""
     for i in range(0, len(indices), 2):
-        start_index = indices[i] + 11
+        start_index = indices[i] + len(boundary)
         end_index = indices[i + 1]
         long_description += readme[start_index:end_index]
     return long_description
@@ -111,7 +117,7 @@ def generate_long_description() -> str:
 
 setup(
     name="pyjanitor",
-    version="0.22.0",
+    version="0.31.0",
     description="Tools for cleaning pandas DataFrames",
     author="pyjanitor devs",
     author_email="ericmajinglong@gmail.com",
@@ -123,5 +129,5 @@ setup(
     extras_require=EXTRA_REQUIRES,
     python_requires=">=3.6",
     long_description=generate_long_description(),
-    long_description_content_type="text/x-rst",
+    long_description_content_type="text/markdown",
 )

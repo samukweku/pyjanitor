@@ -1,16 +1,17 @@
 from functools import partial
 from typing import Optional, Union
-import pandas_flavor as pf
-import pandas as pd
 
-from janitor.utils import check, deprecated_alias
+import pandas as pd
+import pandas_flavor as pf
+
+from janitor.utils import check, check_column, deprecated_alias
 
 
 @pf.register_dataframe_method
 @deprecated_alias(col_name="column_name", type="cleaning_style")
 def currency_column_to_numeric(
     df: pd.DataFrame,
-    column_name,
+    column_name: str,
     cleaning_style: Optional[str] = None,
     cast_non_numeric: Optional[dict] = None,
     fill_all_non_numeric: Optional[Union[float, int]] = None,
@@ -25,41 +26,96 @@ def currency_column_to_numeric(
     usually the case when reading CSV files that were modified in Excel.
     Empty strings (i.e. `''`) are retained as `NaN` values.
 
-    :param df: The DataFrame
-    :param column_name: The column to modify
-    :param cleaning_style: What style of cleaning to perform. If None, standard
-        cleaning is applied. Options are:
+    Examples:
+        >>> import pandas as pd
+        >>> import janitor
+        >>> df = pd.DataFrame({
+        ...     "a_col": [" 24.56", "-", "(12.12)", "1,000,000"],
+        ...     "d_col": ["", "foo", "1.23 dollars", "-1,000 yen"],
+        ... })
+        >>> df  # doctest: +NORMALIZE_WHITESPACE
+               a_col         d_col
+        0      24.56
+        1          -           foo
+        2    (12.12)  1.23 dollars
+        3  1,000,000    -1,000 yen
 
-            * 'accounting':
-            Replaces numbers in parentheses with negatives, removes commas.
+        The default cleaning style.
 
-    :param cast_non_numeric: A dict of how to coerce certain strings. For
-        example, if there are values of 'REORDER' in the DataFrame,
-        {'REORDER': 0} will cast all instances of 'REORDER' to 0.
-    :param fill_all_non_numeric: Similar to `cast_non_numeric`, but fills all
-        strings to the same value. For example,  fill_all_non_numeric=1, will
-        make everything that doesn't coerce to a currency 1.
-    :param remove_non_numeric: Will remove rows of a DataFrame that contain
-        non-numeric values in the `column_name` column. Defaults to `False`.
-    :returns: A pandas DataFrame.
-    """
+        >>> df.currency_column_to_numeric("d_col")
+               a_col    d_col
+        0      24.56      NaN
+        1          -      NaN
+        2    (12.12)     1.23
+        3  1,000,000 -1000.00
+
+        The accounting cleaning style.
+
+        >>> df.currency_column_to_numeric("a_col", cleaning_style="accounting")  # doctest: +NORMALIZE_WHITESPACE
+                a_col         d_col
+        0       24.56
+        1        0.00           foo
+        2      -12.12  1.23 dollars
+        3  1000000.00    -1,000 yen
+
+    Valid cleaning styles are:
+
+    - `None`: Default cleaning is applied. Empty strings are always retained as
+        `NaN`. Numbers, `-`, `.` are extracted and the resulting string
+        is cast to a float.
+    - `'accounting'`: Replaces numbers in parentheses with negatives, removes commas.
+
+    Args:
+        df: The pandas DataFrame.
+        column_name: The column containing currency values to modify.
+        cleaning_style: What style of cleaning to perform.
+        cast_non_numeric: A dict of how to coerce certain strings to numeric
+            type. For example, if there are values of 'REORDER' in the DataFrame,
+            `{'REORDER': 0}` will cast all instances of 'REORDER' to 0.
+            Only takes effect in the default cleaning style.
+        fill_all_non_numeric: Similar to `cast_non_numeric`, but fills all
+            strings to the same value. For example, `fill_all_non_numeric=1`, will
+            make everything that doesn't coerce to a currency `1`.
+            Only takes effect in the default cleaning style.
+        remove_non_numeric: If set to True, rows of `df` that contain
+            non-numeric values in the `column_name` column will be removed.
+            Only takes effect in the default cleaning style.
+
+    Raises:
+        ValueError: If `cleaning_style` is not one of the accepted styles.
+
+    Returns:
+        A pandas DataFrame.
+    """  # noqa: E501
 
     check("column_name", column_name, [str])
+    check_column(df, column_name)
 
     column_series = df[column_name]
     if cleaning_style == "accounting":
-        df.loc[:, column_name] = df[column_name].apply(
-            _clean_accounting_column
+        outcome = (
+            df[column_name]
+            .str.strip()
+            .str.replace(",", "", regex=False)
+            .str.replace(")", "", regex=False)
+            .str.replace("(", "-", regex=False)
+            .replace({"-": 0.0})
+            .astype(float)
         )
-        return df
+        return df.assign(**{column_name: outcome})
+    if cleaning_style is not None:
+        raise ValueError(
+            "`cleaning_style` is expected to be one of ('accounting', None). "
+            f"Got {cleaning_style!r} instead."
+        )
 
     if cast_non_numeric:
         check("cast_non_numeric", cast_non_numeric, [dict])
 
     _make_cc_patrial = partial(
-        _currency_column_to_numeric, cast_non_numeric=cast_non_numeric
+        _currency_column_to_numeric,
+        cast_non_numeric=cast_non_numeric,
     )
-
     column_series = column_series.apply(_make_cc_patrial)
 
     if remove_non_numeric:
@@ -81,35 +137,25 @@ def currency_column_to_numeric(
     return df
 
 
-def _clean_accounting_column(x: str) -> float:
-    """
-    Perform the logic for the `cleaning_style == "accounting"` attribute.
-
-    This is a private function, not intended to be used outside of
-    `currency_column_to_numeric``.
-
-    It is intended to be used in a pandas `apply` method.
-
-    :returns: An object with a cleaned column.
-    """
-    y = x.strip()
-    y = y.replace(",", "")
-    y = y.replace(")", "")
-    y = y.replace("(", "-")
-    if y == "-":
-        return 0.00
-    return float(y)
-
-
-def _currency_column_to_numeric(x, cast_non_numeric=None) -> str:
+def _currency_column_to_numeric(
+    x: str,
+    cast_non_numeric: Optional[dict] = None,
+) -> Union[int, float, str]:
     """
     Perform logic for changing cell values.
 
     This is a private function intended to be used only in
-    `currency_column_to_numeric``.
+    `currency_column_to_numeric`.
 
     It is intended to be used in a pandas `apply` method, after being passed
     through `partial`.
+
+    Args:
+        x: A string representing currency.
+        cast_non_numeric: A dict of how to coerce certain strings to numeric
+            type. For example, if there are values of 'REORDER' in the
+            DataFrame, `{'REORDER': 0}` will cast all instances of 'REORDER'
+            to 0.
     """
     acceptable_currency_characters = {
         "-",
@@ -125,18 +171,18 @@ def _currency_column_to_numeric(x, cast_non_numeric=None) -> str:
         "9",
         "0",
     }
-    if len(x) == 0:
+    if not x:
         return "ORIGINAL_NA"
 
     if cast_non_numeric:
-        if x in cast_non_numeric.keys():
+        if x in cast_non_numeric:
+            mapped_x = cast_non_numeric[x]
             check(
-                "{%r: %r}" % (x, str(cast_non_numeric[x])),
-                cast_non_numeric[x],
+                "{%r: %r}" % (x, str(mapped_x)),
+                mapped_x,
                 [int, float],
             )
-            return cast_non_numeric[x]
-        return "".join(i for i in x if i in acceptable_currency_characters)
+            return mapped_x
     return "".join(i for i in x if i in acceptable_currency_characters)
 
 
@@ -146,5 +192,6 @@ def _replace_empty_string_with_none(column_series):
 
 
 def _replace_original_empty_string_with_none(column_series):
+    """Replaces original empty string with None"""
     column_series.loc[column_series == "ORIGINAL_NA"] = None
     return column_series

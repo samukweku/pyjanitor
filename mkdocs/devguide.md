@@ -22,10 +22,11 @@ To get started:
 1. Fork the repository.
 2. Ensure you have Docker running on your local machine.
 3. Ensure you have VSCode running on your local machine.
-4. In Visual Studio Code,
+4. In VS Code, Install an extension called `Remote - Containers`.
+5. In Visual Studio Code,
     click on the quick actions Status Bar item in the lower left corner.
-5. Then select "Remote Containers: Clone Repository In Container Volume".
-6. Enter in the URL of your fork of `pyjanitor`.
+6. Then select "Remote Containers: Clone Repository In Container Volume".
+7. Enter in the URL of your fork of `pyjanitor`.
 
 VSCode will pull down the prebuilt Docker container,
 git clone the repository for you inside an isolated Docker volume,
@@ -34,7 +35,7 @@ and mount the repository directory inside your Docker container.
 Follow best practices to submit a pull request by making a feature branch.
 Now, hack away, and submit in your pull request!
 
-You shouln't be able to access the cloned repo
+You shouldn't be able to access the cloned repo
 on your local hard drive.
 If you do want local access, then clone the repo locally first
 before selecting "Remote Containers: Open Folder In Container".
@@ -51,47 +52,42 @@ so please read the in-line documentation in the Dockerfile carefully.
 Firstly, begin by forking the [`pyjanitor` repo][repo] on GitHub.
 Then, clone your fork locally:
 
-[repo]: https://github.com/ericmjl/pyjanitor
+[repo]: https://github.com/pyjanitor-devs/pyjanitor
 
 ```bash
-git clone git@github.com:your_name_here/pyjanitor.git
+git clone git@github.com:<your_github_username>/pyjanitor.git
 ```
 
 ### Setup the conda environment
 
-Now, install your local copy into a conda environment.
+Now, install your cloned repo into a conda environment.
 Assuming you have conda installed,
 this is how you set up your fork for local development
 
 ```bash
 cd pyjanitor/
-make install
+# Activate the pyjanitor conda environment
+source activate pyjanitor-dev
+
+# Create your conda environment
+conda env create -f environment-dev.yml
+
+# Install PyJanitor in development mode
+python setup.py develop
+
+# Register current virtual environment as a Jupyter Python kernel
+python -m ipykernel install --user --name pyjanitor-dev --display-name "PyJanitor development"
 ```
-
-This also installs your new conda environment as a Jupyter-accessible kernel.
 If you plan to write any notebooks,
-to run correctly inside the environment,
-make sure you select the correct kernel from the top right corner of JupyterLab!
-
-!!! note "Windows Users"
-
-    If you are on Windows,
-    you may need to install `make` before you can run the install.
-    You can get it from `conda-forge`::
-
-    ``bash
-    conda install -c defaults -c conda-forge make
-    ``
-
-    You should be able to run `make` now.
-    The command above installs `make` to the `~/Anaconda3/Library/bin` directory.
+make sure they run correctly inside the environment by
+selecting the correct kernel from the top right corner of JupyterLab!
 
 !!! note "PyCharm Users"
 
     For PyCharm users,
     here are some `instructions <PYCHARM_USERS.html>`__  to get your Conda environment set up.
 
-### Install the pre-commit hooks.
+### Install the pre-commit hooks
 
 `pre-commit` hooks are available
 to run code formatting checks automagically before git commits happen.
@@ -107,38 +103,27 @@ pre-commit install
 
 ### Build docs locally
 
-You should also be able to build the docs locally.
+You should also be able to preview the docs locally.
 To do this, from the main `pyjanitor` directory:
 
 ```bash
-make docs
+python -m mkdocs serve
 ```
-
 The command above allows you to view the documentation locally in your browser.
-`Sphinx (a python documentation generator) <http://www.sphinx-doc.org/en/stable/usage/quickstart.html>`_ builds and renders the html for you,
-and you can find the html files by navigating to `pyjanitor/docs/_build`,
-and then you can find the correct html file.
-To see the main pyjanitor page,
-open the `index.html` file.
 
-!!! note "Errors with documentation builds"
+If you get any errors about importing modules when running `mkdocs serve`,
+first activate the development environment:
 
-    If you get any errors about importing modules when running `make docs`,
-    first activate the development environment:
-
-    ``bash
-    source activate pyjanitor-dev || conda activate pyjanitor-dev
-    ``
-
-Sphinx uses `rst files (restructured text) <http://www.sphinx-doc.org/en/master/usage/restructuredtext/basics.html>`_ as its markdown language.
-To edit documentation,
-go to the rst file that corresponds to the html file you would like to edit.
-Make the changes directly in the rst file with the correct markup.
-Save the file and rebuild the html pages using the same commands as above to see what your changes look like in html.
+```bash
+source activate pyjanitor-dev || conda activate pyjanitor-dev
+```
 
 ### Plan out the change you'd like to contribute
 
-The old adage rings true: failing to plan means planning to fail.
+The old adage rings true:
+
+> failing to plan means planning to fail.
+
 We'd encourage you to flesh out the idea you'd like to contribute
 on the GitHub issue tracker before embarking on a contribution.
 Submitting new code, in particular,
@@ -151,7 +136,7 @@ submit an issue to the [`pyjanitor` GitHub issue tracker][issuetracker]
 describing your planned changes.
 The issue tracker also helps us keep track of who is working on what.
 
-[issuetracker]: https://github.com/ericmjl/pyjanitor/issues
+[issuetracker]: https://github.com/pyjanitor-devs/pyjanitor
 
 ### Create a branch for local development
 
@@ -162,38 +147,68 @@ based off the latest version of the `dev` branch.
 To create a new branch:
 
 ```bash
-git checkout -b name-of-your-bugfix-or-feature dev
+git checkout -b <name-of-your-bugfix-or-feature> dev
 ```
 
-Now you can make your changes locally.
+### Write the Code
+
+As you work, remember to adhere to the coding standards and practices that pyjanitor follows. If in doubt, refer to existing code or bring up your questions in the GitHub issue you created. Some tips for writing code:
+
+**Commit Early, Commit Often:** Make frequent, smaller commits. This helps to track progress and makes it easier for maintainers to follow your work. Include useful commit messages that describe the changes you're making:
+
+**Stay Updated with dev branch:** Regularly pull the latest changes from the dev branch to ensure your feature branch is up-to-date, reducing the likelihood of merge conflicts:
+
+```bash
+git fetch origin dev
+git rebase origin/dev
+```
+
+**Write Tests:** For every feature or bugfix, accompanying tests are essential.
+They ensure the feature works as expected or the bug is truly fixed.
+Tests should ideally run in less than 2 seconds.
+If using Hypothesis for testing,
+apply the `@settings(max_examples=10, timeout=None)` decorator.
+
+### Check your environment
+
+To ensure that your environment is properly set up, run the following command:
+
+```bash
+python -m pytest -m "not turtle"
+```
+
+If all tests pass then your environment is setup for
+development and you are ready to contribute 🥳.
 
 ### Check your code
 
 When you're done making changes,
-check that your changes are properly formatted and that all tests still pass::
+commit your staged files with a meaningful message.
+If installed correctly, you will automatically run pre-commit hooks
+that check code for code style adherence.
+These same checks will be run on GitHub Actions,
+so no worries if you don't have the running locally.
+If the pre-commit hooks fail,
+be sure to fix the issues (as raised by them) before committing.
+If you feel lost on how to fix the code,
+please feel free to ping the maintainers on GitHub -
+we can take things slowly to get it right,
+and make this an educational opportunity for all who come by!
 
-```bash
-make check
-```
+!!! tip
+    You can run `python -m pytest -m "not turtle"` to run the fast tests.
 
-If any of the checks fail, you can apply the checks individually (to save time):
+!!! note "Running test locally"
+    When you run tests locally,
+    the tests in `chemistry.py`, `biology.py`, `spark.py`
+    are automatically skipped if you don't have
+    the optional dependencies (e.g. `rdkit`) installed.
 
-* Automated code formatting: `make style`
-* Code styling problems check: `make lint`
-* Code unit testing: `make test`
-
-Styling problems must be resolved before the pull request can be accepted.
-
-`make test` runs all `pyjanitor`'s unit tests
-to probe whether changes to the source code have potentially introduced bugs.
-These tests must also pass before the pull request is accepted,
-and the continuous integration system up on GitHub Actions
-will help run all of the tests before they are committed to the repository.
-
-When you run the test locally,
-the tests in `chemistry.py`, `biology.py`, `spark.py`
-are automatically skipped if you don't have
-the optional dependencies (e.g. `rdkit`) installed.
+!!! info
+    * pre-commit **does not run** your tests locally rather all tests are run in continuous integration (CI).
+    * All tests must pass in CI before the pull request is accepted,
+    and the continuous integration system up on GitHub Actions
+    will help run all of the tests before they are committed to the repository.
 
 ### Commit your changes
 
@@ -202,12 +217,12 @@ Now you can commit your changes and push your branch to GitHub:
 ```bash
 git add .
 git commit -m "Your detailed description of your changes."
-git push origin name-of-your-bugfix-or-feature
+git push origin <name-of-your-bugfix-or-feature>
 ```
 
 ### Submit a pull request through the GitHub website
 
-Congratulations, you've made it to the penultimate step;
+Congratulations 🎉🎉🎉, you've made it to the penultimate step;
 your code is ready to be checked and reviewed by the maintainers!
 Head over to the GitHub website and create a pull request.
 When you are picking out which branch to merge into,
@@ -232,6 +247,20 @@ can help you with reviewing the code checks.
 
 pyjanitor supports Python 3.6+,
 so all contributed code must maintain this compatibility.
+
+## Docstring Style
+
+We follow the Google docstring style, please read [Napoleon's documentation](https://sphinxcontrib-napoleon.readthedocs.io/en/latest/example_google.html) for a detailed introduction.
+
+We are using the following docstring section identifiers -- please stick to them if you are contributing a docstring change:
+
+- **Examples:** for sample code blocks demonstrating the use of pyjanitor. keep example blocks in the `pycon` (python-console) style, i.e., input code prefixed by `>>> ` and `... `, and output code with no prefix.
+- **Args:** for function parameters
+- **Raises:** for exceptions
+- **Returns:** for function return value(s)
+- **Yields:** for generator yield value(s)
+
+If possible, it is preferable to stick to this section ordering within each docstring.
 
 ## Tips
 

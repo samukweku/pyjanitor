@@ -1,11 +1,12 @@
+import numpy as np
 import pandas as pd
 import pytest
-import numpy as np
+from hypothesis import given, settings
 from pandas.testing import assert_frame_equal
-from hypothesis import assume, given
+
 from janitor.testing_utils.strategies import (
-    df_strategy,
     categoricaldf_strategy,
+    df_strategy,
 )
 
 
@@ -31,65 +32,107 @@ def test_case_when_1():
         df.a,
         (df.b == 0) & (df.a == 0),
         "x",
-        df.c,
+        default=df.c,
         column_name="value",
     )
 
     assert_frame_equal(result, expected)
 
 
-@given(df=df_strategy())
-def test_len_args(df):
-    """Raise ValueError if `args` length is less than 3."""
-    with pytest.raises(ValueError):
-        df.case_when(df.a < 10, "less_than_10", column_name="a")
-
-
-@given(df=df_strategy())
-def test_args_even(df):
-    """Raise ValueError if `args` length is even."""
-    with pytest.raises(ValueError):
-        df.case_when(
-            df.a < 10, "less_than_10", df.a == 5, "five", column_name="a"
+def test_len_args(dataframe):
+    """Raise ValueError if `args` length is less than 2."""
+    with pytest.raises(
+        ValueError,
+        match="At least two arguments are required for the `args` parameter",
+    ):
+        dataframe.case_when(
+            dataframe.a < 10, default="less_than_10", column_name="a"
         )
 
 
-@given(df=df_strategy())
-def test_column_name(df):
+def test_args_even(dataframe):
+    """Raise ValueError if `args` length is odd."""
+    with pytest.raises(
+        ValueError, match="The number of conditions and values do not match.+"
+    ):
+        dataframe.case_when(
+            dataframe.a < 10,
+            "less_than_10",
+            dataframe.a == 5,
+            default="five",
+            column_name="a",
+        )
+
+
+def test_args_even_warning(dataframe):
+    """
+    Raise Warning if `args` length
+    is odd and `default` is None.
+    """
+    with pytest.warns(DeprecationWarning):
+        dataframe.case_when(
+            dataframe.a < 10,
+            "less_than_10",
+            dataframe.a == 5,
+            column_name="a",
+        )
+
+
+def test_column_name(dataframe):
     """Raise TypeError if `column_name` is not a string."""
     with pytest.raises(TypeError):
-        df.case_when(df.a < 10, "less_than_10", df.a, column_name=("a",))
+        dataframe.case_when(
+            dataframe.a < 10,
+            "less_than_10",
+            default=dataframe.a,
+            column_name=("a",),
+        )
 
 
-@given(df=df_strategy())
-def test_default_ndim(df):
+def test_default_ndim():
     """Raise ValueError if `default` ndim > 1."""
-    with pytest.raises(ValueError):
-        df.case_when(df.a < 10, "less_than_10", df, column_name="a")
+    df = pd.DataFrame({"a": range(20)})
+    with pytest.raises(
+        ValueError,
+        match="The argument for the `default` parameter "
+        "should either be a 1-D array.+",
+    ):
+        df.case_when(
+            df.a < 10, "less_than_10", default=df.to_numpy(), column_name="a"
+        )
 
 
-@given(df=df_strategy())
-def test_default_length(df):
+@pytest.mark.xfail(reason="Error handled by pd.Series.mask")
+def test_default_length():
     """Raise ValueError if `default` length != len(df)."""
-    assume(len(df) > 10)
+    df = pd.DataFrame({"a": range(20)})
+    with pytest.raises(
+        ValueError,
+        match=("The length of the argument for the `default` parameter is.+"),
+    ):
+        df.case_when(
+            df.a < 10,
+            "less_than_10",
+            default=df.loc[:5, "a"],
+            column_name="a",
+        )
+
+
+def test_error_multiple_conditions():
+    """Raise ValueError for multiple conditions."""
+    df = pd.DataFrame({"a": range(20)})
     with pytest.raises(ValueError):
         df.case_when(
-            df.a < 10, "less_than_10", df.loc[:5, "a"], column_name="a"
+            df.a < 10, "baby", df.a + 5, "kid", default=df.a, column_name="a"
         )
 
 
 @given(df=df_strategy())
-def test_error_multiple_conditions(df):
-    """Raise ValueError for multiple conditions."""
-    with pytest.raises(ValueError):
-        df.case_when(df.a < 10, "baby", df.a + 5, "kid", df.a, column_name="a")
-
-
-@given(df=df_strategy())
+@settings(deadline=None, max_examples=10)
 def test_case_when_condition_callable(df):
     """Test case_when for callable."""
     result = df.case_when(
-        lambda df: df.a < 10, "baby", "bleh", column_name="bleh"
+        lambda df: df.a < 10, "baby", default="bleh", column_name="bleh"
     )
     expected = np.where(df.a < 10, "baby", "bleh")
     expected = df.assign(bleh=expected)
@@ -97,19 +140,24 @@ def test_case_when_condition_callable(df):
 
 
 @given(df=df_strategy())
+@settings(deadline=None, max_examples=10)
 def test_case_when_condition_eval(df):
     """Test case_when for callable."""
-    result = df.case_when("a < 10", "baby", "bleh", column_name="bleh")
+    result = df.case_when("a < 10", "baby", default="bleh", column_name="bleh")
     expected = np.where(df.a < 10, "baby", "bleh")
     expected = df.assign(bleh=expected)
     assert_frame_equal(result, expected)
 
 
 @given(df=df_strategy())
+@settings(deadline=None, max_examples=10)
 def test_case_when_replacement_callable(df):
     """Test case_when for callable."""
     result = df.case_when(
-        "a > 10", lambda df: df.a + 10, lambda df: df.a * 2, column_name="bleh"
+        "a > 10",
+        lambda df: df.a + 10,
+        default=lambda df: df.a * 2,
+        column_name="bleh",
     )
     expected = np.where(df.a > 10, df.a + 10, df.a * 2)
     expected = df.assign(bleh=expected)
@@ -117,14 +165,36 @@ def test_case_when_replacement_callable(df):
 
 
 @given(df=categoricaldf_strategy())
-def test_case_when_default_list(df):
+@settings(deadline=None, max_examples=10)
+def test_case_when_default_array(df):
+    """
+    Test case_when for scenarios where `default` is array-like
+    """
+    default = np.arange(len(df))
+    result = df.case_when(
+        "numbers > 1",
+        lambda df: df.numbers + 10,
+        default=default,
+        column_name="bleh",
+    )
+    expected = np.where(df.numbers > 1, df.numbers + 10, default)
+    expected = df.assign(bleh=expected)
+    assert_frame_equal(result, expected, check_dtype=False)
+
+
+@given(df=categoricaldf_strategy())
+@settings(deadline=None, max_examples=10)
+def test_case_when_default_list_like(df):
     """
     Test case_when for scenarios where `default` is list-like,
-    but not a Pandas or numpy object.
+    but has no shape attribute.
     """
     default = range(len(df))
     result = df.case_when(
-        "numbers > 1", lambda df: df.numbers + 10, default, column_name="bleh"
+        "numbers > 1",
+        lambda df: df.numbers + 10,
+        default=default,
+        column_name="bleh",
     )
     expected = np.where(df.numbers > 1, df.numbers + 10, default)
     expected = df.assign(bleh=expected)
@@ -132,13 +202,16 @@ def test_case_when_default_list(df):
 
 
 @given(df=categoricaldf_strategy())
+@settings(deadline=None, max_examples=10)
 def test_case_when_default_index(df):
-    """Test case_when for scenarios where `default` is an index."""
+    """
+    Test case_when for scenarios where `default` is an index.
+    """
     default = range(len(df))
     result = df.case_when(
         "numbers > 1",
         lambda df: df.numbers + 10,
-        pd.Index(default),
+        default=pd.Index(default),
         column_name="bleh",
     )
     expected = np.where(df.numbers > 1, df.numbers + 10, default)
@@ -147,6 +220,7 @@ def test_case_when_default_index(df):
 
 
 @given(df=df_strategy())
+@settings(deadline=None, max_examples=10)
 def test_case_when_multiple_args(df):
     """Test case_when for multiple arguments."""
     result = df.case_when(
@@ -158,7 +232,7 @@ def test_case_when_multiple_args(df):
         "young",
         "30 <= a < 50",
         "mature",
-        "grandpa",
+        default="grandpa",
         column_name="elderly",
     )
     conditions = [

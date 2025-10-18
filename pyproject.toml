@@ -31,18 +31,67 @@ verbose = 2
 
 # https://docs.pytest.org/en/6.2.x/mark.html#registering-marks
 [tool.pytest.ini_options]
-addopts = "--cov=janitor/ --cov-report=html --cov-report=xml --cov-report=term-missing  --durations=0"
-
 markers = [
-    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
-    "biology",
-    "chemistry",
-    "engineering",
-    "finance",
-    "functions: main janitor functions suite",
-    "ml: Machine learning-specific data cleaning functions.",
-    "spark_functions",
-    "timeseries",
-    "utils",
-    "xarray",
+    "functions: test for general functions",
+    "biology: tests for biology",
+    "chemistry: tests for chemistry",
+    "finance: tests for finance",
+    "utils: utility tests",
+    "engineering: tests for engineering",
+    "ml: tests for machine learning",
+    "polars: tests for polars methods",
+    "spark_functions: tests for pyspark functions",
+    "xarray: tests for xarray functions",
+    "timeseries: tests for timeseries",
+    "documentation: tests for documentation",
+    "turtle: tests that take more than 5 seconds to execute",
 ]
+
+
+[tool.ruff]
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
+lint.select = ["E", "F", "I"]
+lint.ignore = []
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+lint.fixable = ["A", "B", "C", "D", "E", "F", "G", "I", "N", "Q", "S", "T", "W", "ANN", "ARG", "BLE", "COM", "DJ", "DTZ", "EM", "ERA", "EXE", "FBT", "ICN", "INP", "ISC", "NPY", "PD", "PGH", "PIE", "PL", "PT", "PTH", "PYI", "RET", "RSE", "RUF", "SIM", "SLF", "TCH", "TID", "TRY", "UP", "YTT"]
+lint.unfixable = []
+
+# Exclude a variety of commonly ignored directories.
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "nbconvert_config.py",
+]
+
+# Same as Black.
+line-length = 88
+
+# Allow unused variables when underscore-prefixed.
+lint.dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+# Assume Python 3.10
+target-version = "py310"
+
+[tool.ruff.lint.mccabe]
+# Unlike Flake8, default to a complexity level of 10.
+max-complexity = 10

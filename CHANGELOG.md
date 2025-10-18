@@ -1,11 +1,153 @@
 # Changelog
 
 ## [Unreleased]
+-   [ENH] Added `row_count` parameter for janitor.conditional_join - Issue #1269 @samukweku
+-   [ENH] Reverse deprecation of `pivot_wider()` -- Issue #1464
+-   [ENH] Add accessor and method for pandas DataFrameGroupBy objects. - Issue #587 @samukweku
+-   [ENH] Call mutate/summarise directly on groupby objects instead. Also add `ungroup` method to expose underlying dataframe of a grouped object. - Issue #1511 @samukweku
+-   [BUG] Fix incorrect output of `pivot_wider`, where `index` and `names_from` is provided, and values_from is None. - Issue #1509 @samukweku
 
+## [v0.31.0] - 2025-03-07
+
+-   [ENH] Added support for pd.Series.select - Issue #1394 @samukweku
+-   [ENH] Added suport for janitor.mutate - Issue #1226 @samukweku
+-   [ENH] Added support for janitor.summarise - Issue #1225 @samukweku
+-   [ENH] Added support for janitor.alias - Issue #1449 @samukweku
+
+## [v0.30.0] - 2024-12-04
+
+## [v0.29.2] - 2024-09-28
+
+## [v0.29.1] - 2024-09-23
+
+## [v0.29.0] - 2024-09-15
+
+-   [DOC] Un-deprecate `join_apply` as no alternative currently exists - Issue #1399 @lbeltrame
+
+## [v0.28.1] - 2024-08-09
+
+## [v0.28.0] - 2024-08-03
+
+-   [ENH] Added a `cartesian_product` function, as well as an `expand` method for pandas. - Issue #1293 @samukweku
+-   [ENH] Improve `pivot_longer` when `sort_by_appearance` is True. Added `pivot_longer_spec` for more control on how the dataframe should be unpivoted. -@samukweku #1361
+-   [ENH] Added `convert_excel_date` and `convert_matlab_date` methods for polars - Issue #1352
+-   [ENH] Added a `complete` method for polars. - Issue #1352 @samukweku
+-   [ENH] Added a `pivot_longer` method, and a `pivot_longer_spec` function for polars - Issue #1352 @samukweku
+-   [ENH] Added a `row_to_names` method for polars. Issue #1352 @samukweku
+-   [ENH] `read_commandline` function now supports polars - Issue #1352 @samukweku
+-   [ENH] `xlsx_cells` function now supports polars - Issue #1352 @samukweku
+-   [ENH] `xlsx_table` function now supports polars - Issue #1352 @samukweku
+-   [ENH] Added a `clean_names` method for polars - it can be used to clean the column names, or clean column values . Issue #1343 @samukweku
+-   [ENH] Improved performance for non-equi joins when using numba - @samukweku PR #1341
+-   [ENH] pandas Index,Series, DataFrame now supported in the `complete` method. - PR #1369 @samukweku
+-   [ENH] Improve performance for `first/last` in conditional_join, when the join columns in the right dataframe are sorted. - PR #1382 @samukweku
+
+## [v0.27.0] - 2024-03-21
+
+-   [BUG] Fix logic for groupby in complete. Index support deprecated. Fix deprecation warning for fillna in `complete` PR #1289 @samukweku
+-   [ENH] `select` function now supports variable arguments - PR #1288 @samukweku
+-   [ENH] `conditional_join` now supports timedelta dtype. - PR #1297 @samukweku
+-   [ENH] `get_join_indices` function added - returns only join indices between two dataframes. Issue #1310 @samukweku
+-   [ENH] `explode_index` function added. - Issue #1283
+-   [ENH] `conditional_join` now supports timedelta dtype. - PR #1297
+-   [ENH] `change_index_dtype` added. - @samukweku Issue #1314
+-   [ENH] Add `glue` and `axis` parameters to `collapse_levels`. - Issue #211 @samukweku
+-   [ENH] `row_to_names` now supports multiple rows conversion to columns. - @samukweku Issue #1333
+-   [ENH] Fix warnings from Pandas. `truncate_datetime` now uses a vectorized option. -@samukweku #1337
+
+## [v0.26.0] - 2023-09-18
+
+-   [ENH] `clean_names` can now be applied to column values. Issue #995 @samukweku
+-   [BUG] Fix ImportError - Issue #1285 @samukweku
+
+## [v0.25.0] - 2023-07-27
+
+-   [INF] Replace `pytest.ini` file with `pyproject.toml` file. PR #1204 @Zeroto521
+-   [INF] Extract docstrings tests from all tests. PR #1205 @Zeroto521
+-   [BUG] Address the `TypeError` when importing v0.24.0 (issue #1201 @xujiboy and @joranbeasley)
+-   [INF] Fixed issue with missing PyPI README. PR #1216 @thatlittleboy
+-   [INF] Update some `mkdocs` compatibility code. PR #1231 @thatlittleboy
+-   [INF] Migrated docstring style from Sphinx to Google for better compatibility with `mkdocstrings`. PR #1235 @thatlittleboy
+-   [INF] Prevent selection of chevrons (`>>>`) and outputs in Example code blocks. PR #1237 @thatlittleboy
+-   [DEPR] Add deprecation warnings for `process_text`, `rename_column`, `rename_columns`, `filter_on`, `remove_columns`, `fill_direction`. Issue #1045 @samukweku
+-   [ENH] `pivot_longer` now supports named groups where `names_pattern` is a regular expression. A dictionary can now be passed to `names_pattern`, and is internally evaluated as a list/tuple of regular expressions. Issue #1209 @samukweku
+-   [ENH] Improve selection in `conditional_join`. Issue #1223 @samukweku
+-   [ENH] Add `col` class for selecting columns within an expression. Currently limited to use within `conditional_join`. PR #1260 @samukweku.
+-   [ENH] Performance improvement for range joins in `conditional_join`, when `use_numba = False`. Performance improvement for equi-join and a range join, when `use_numba = True`, for many to many join with wide ranges. PR #1256, #1267 @samukweku
+-   [DEPR] Add deprecation warning for `pivot_wider`. Issue #1045 @samukweku
+-   [BUG] Fix string column selection on a MultiIndex. Issue #1265. @samukweku
+
+## [v0.24.0] - 2022-11-12
+
+-   [ENH] Add lazy imports to speed up the time taken to load pyjanitor (part 2)
+-   [DOC] Updated developer guide docs.
+-   [ENH] Allow column selection/renaming within conditional_join. Issue #1102. Also allow first or last match. Issue #1020 @samukweku.
+-   [ENH] New decorator `deprecated_kwargs` for breaking API. #1103 @Zeroto521
+-   [ENH] Extend select_columns to support non-string columns. Issue #1105 @samukweku
+-   [ENH] Performance improvement for groupby_topk. Issue #1093 @samukweku
+-   [ENH] `min_max_scale` drop `old_min` and `old_max` to fit sklearn's method API. Issue #1068 @Zeroto521
+-   [ENH] Add `jointly` option for `min_max_scale` support to transform each column values or entire values. Default transform each column, similar behavior to `sklearn.preprocessing.MinMaxScaler`. (Issue #1067, PR #1112, PR #1123) @Zeroto521
+-   [INF] Require pyspark minimal version is v3.2.0 to cut duplicates codes. Issue #1110 @Zeroto521
+-   [ENH] Add support for extension arrays in `expand_grid`. Issue #1121 @samukweku
+-   [ENH] Add `names_expand` and `index_expand` parameters to `pivot_wider` for exposing missing categoricals. Issue #1108 @samukweku
+-   [ENH] Add fix for slicing error when selecting columns in `pivot_wider`. Issue #1134 @samukweku
+-   [ENH] `dropna` parameter added to `pivot_longer`. Issue #1132 @samukweku
+-   [INF] Update `mkdocstrings` version and to fit its new coming features. PR #1138 @Zeroto521
+-   [BUG] Force `math.softmax` returning `Series`. PR #1139 @Zeroto521
+-   [INF] Set independent environment for building documentation. PR #1141 @Zeroto521
+-   [DOC] Add local documentation preview via github action artifact. PR #1149 @Zeroto521
+-   [ENH] Enable `encode_categorical` handle 2 (or more ) dimensions array. PR #1153 @Zeroto521
+-   [TST] Fix testcases failing on Window. Issue #1160 @Zeroto521, and @samukweku
+-   [INF] Cancel old workflow runs via Github Action `concurrency`. PR #1161 @Zeroto521
+-   [ENH] Faster computation for non-equi join, with a numba engine. Speed improvement for left/right joins when `sort_by_appearance` is False. Issue #1102 @samukweku
+-   [BUG] Avoid `change_type` mutating original `DataFrame`. PR #1162 @Zeroto521
+-   [ENH] The parameter `column_name` of `change_type` totally supports inputing multi-column now. #1163 @Zeroto521
+-   [ENH] Fix error when `sort_by_appearance=True` is combined with `dropna=True`. Issue #1168 @samukweku
+-   [ENH] Add explicit default parameter to `case_when` function. Issue #1159 @samukweku
+-   [BUG] pandas 1.5.x `_MergeOperation` doesn't have `copy` keyword anymore. Issue #1174 @Zeroto521
+-   [ENH] `select_rows` function added for flexible row selection. Generic `select` function added as well. Add support for MultiIndex selection via dictionary. Issue #1124 @samukweku
+-   [TST] Compat with macos and window, to fix `FailedHealthCheck` Issue #1181 @Zeroto521
+-   [INF] Merge two docs CIs (`docs-preview.yml` and `docs.yml`) to one. And add `documentation` pytest mark. PR #1183 @Zeroto521
+-   [INF] Merge `codecov.yml` (only works for the dev branch pushing event) into `tests.yml` (only works for PR event). PR #1185 @Zeroto521
+-   [TST] Fix failure for test/timeseries/test_fill_missing_timestamp. Issue #1184 @samukweku
+-   [BUG] Import `DataDescription` to fix: `AttributeError: 'DataFrame' object has no attribute 'data_description'`. PR #1191 @Zeroto521
+
+## [v0.23.1] - 2022-05-03
+
+-   [DOC] Updated `fill.py` and `update_where.py` documentation with working examples.
 -   [ENH] Deprecate `num_bins` from `bin_numeric` in favour of `bins`, and allow generic `**kwargs` to be passed into `pd.cut`. Issue #969. @thatlittleboy
 -   [ENH] Fix `concatenate_columns` not working on category inputs @zbarry
 -   [INF] Simplify CI system @ericmjl
 -   [ENH] Added "read_commandline" function to janitor.io @BaritoneBeard
+-   [BUG] Fix bug with the complement parameter of `filter_on`. Issue #988. @thatlittleboy
+-   [ENH] Add `xlsx_table`, for reading tables from an Excel sheet. @samukweku
+-   [ENH] minor improvements for conditional_join; equality only joins are no longer supported; there has to be at least one non-equi join present. @samukweku
+-   [BUG] `sort_column_value_order` no longer mutates original dataframe.
+-   [BUG] Extend `fill_empty`'s `column_names` type range. Issue #998. @Zeroto521
+-   [BUG] Removed/updated error-inducing default arguments in `row_to_names` (#1004) and `round_to_fraction` (#1005). @thatlittleboy
+-   [ENH] `patterns` deprecated in favour of importing `re.compile`. #1007 @samukweku
+-   [ENH] Changes to kwargs in `encode_categorical`, where the values can either be a string or a 1D array. #1021 @samukweku
+-   [ENH] Add `fill_value` and `explicit` parameters to the `complete` function. #1019 @samukweku
+-   [ENH] Performance improvement for `expand_grid`. @samukweku
+-   [BUG] Make `factorize_columns` (PR #1028) and `truncate_datetime_dataframe` (PR #1040) functions non-mutating. @thatlittleboy
+-   [BUG] Fix SettingWithCopyWarning and other minor bugs when using `truncate_datetime_dataframe`, along with further performance improvements (PR #1040). @thatlittleboy
+-   [ENH] Performance improvement for `conditional_join`. @samukweku
+-   [ENH] Multiple `.value` is now supported in `pivot_longer`. Multiple values_to is also supported, when names_pattern is a list or tuple. `names_transform` parameter added, for efficient dtype transformation of unpivoted columns. #1034, #1048, #1051 @samukweku
+-   [ENH] Add `xlsx_cells` for reading a spreadsheet as a table of individual cells. #929 @samukweku.
+-   [ENH] Let `filter_string` suit parameters of `Series.str.contains` Issue #1003 and #1047. @Zeroto521
+-   [ENH] `names_glue` in `pivot_wider` now takes a string form, using str.format_map under the hood. `levels_order` is also deprecated. @samukweku
+-   [BUG] Fixed bug in `transform_columns` which ignored the `column_names` specification when `new_column_names` dictionary was provided as an argument, issue #1063. @thatlittleboy
+-   [BUG] `count_cumulative_unique` no longer modifies the column being counted in the output when `case_sensitive` argument is set to False, issue #1065. @thatlittleboy
+-   [BUG] Fix for gcc missing error in dev container
+-   [DOC] Added a step in the dev guide to install `Remote Container` in VS Code. @ashenafiyb
+-   [DOC] Convert `expand_column` and `find_replace` code examples to doctests, issue #972. @gahjelle
+-   [DOC] Convert `expand_column` code examples to doctests, issue #972. @gahjelle
+-   [DOC] Convert `get_dupes` code examples to doctests, issue #972. @ethompsy
+-   [DOC] Convert `engineering` code examples to doctests, issue #972 @ashenafiyb
+-   [DOC] Convert `groupby_topk` code examples to doctests, issue #972. @ethompsy
+-   [DOC] Add doctests to `math`, issue #972. @gahjelle
+-   [DOC] Add doctests to `math` and `ml`, issue #972. @gahjelle
+-   [DOC] Add doctests to `math`, `ml`, and `xarray`, issue #972. @gahjelle
 
 ## [v0.22.0] - 2021-11-21
 
@@ -42,7 +184,7 @@
 -   [DOC] Updated various documentation sources to reflect pyjanitor-dev ownership. @loganthomas
 -   [INF] Fix `isort` automatic checks. Issue #845. @loganthomas
 -   [ENH] `complete` function now uses variable args (\*args) - @samukweku
--   [EHN] Set `expand_column`'s `sep` default is `"|"`, same to `pandas.Series.str.get_dummies`. Issue #876. @Zeroto521
+-   [ENH] Set `expand_column`'s `sep` default is `"|"`, same to `pandas.Series.str.get_dummies`. Issue #876. @Zeroto521
 -   [ENH] Deprecate `limit` from fill_direction. fill_direction now uses kwargs. @samukweku
 -   [ENH] Added `conditional_join` function that supports joins on non-equi operators. @samukweku
 -   [INF] Speed up pytest via `-n` (pytest-xdist) option. Issue #881. @Zeroto521
@@ -256,7 +398,31 @@ We thank all contributors
 who have helped make `pyjanitor`
 the package that it is today.
 
-[Unreleased]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.22.0...HEAD
+[Unreleased]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.31.0...HEAD
+
+[v0.31.0]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.30.0...v0.31.0
+
+[v0.30.0]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.29.2...v0.30.0
+
+[v0.29.2]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.29.1...v0.29.2
+
+[v0.29.1]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.29.0...v0.29.1
+
+[v0.29.0]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.28.1...v0.29.0
+
+[v0.28.1]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.28.0...v0.28.1
+
+[v0.28.0]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.27.0...v0.28.0
+
+[v0.27.0]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.26.0...v0.27.0
+
+[v0.26.0]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.25.0...v0.26.0
+
+[v0.25.0]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.24.0...v0.25.0
+
+[v0.24.0]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.23.1...v0.24.0
+
+[v0.23.1]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.22.0...v0.23.1
 
 [v0.22.0]: https://github.com/pyjanitor-devs/pyjanitor/compare/v0.21.2...v0.22.0
 

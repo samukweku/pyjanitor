@@ -1,3 +1,68 @@
 # Functions
 
 ::: janitor.functions
+    options:
+      filters:
+      - "!^_"
+      members:
+        - add_columns
+        - alias
+        - also
+        - bin_numeric
+        - case_when
+        - change_index_dtype
+        - change_type
+        - clean_names
+        - coalesce
+        - collapse_levels
+        - complete
+        - concatenate_columns
+        - conditional_join
+        - convert_date
+        - count_cumulative_unique
+        - currency_column_to_numeric
+        - deconcatenate_column
+        - drop_constant_columns
+        - drop_duplicate_columns
+        - dropnotnull
+        - encode_categorical
+        - expand_column
+        - expand_grid
+        - explode_index
+        - factorize_columns
+        - fill
+        - filter
+        - find_replace
+        - flag_nulls
+        - get_dupes
+        - groupby_agg
+        - groupby_topk
+        - impute
+        - jitter
+        - join_apply
+        - label_encode
+        - limit_column_characters
+        - min_max_scale
+        - move
+        - mutate
+        - pivot
+        - process_text
+        - remove_columns
+        - remove_empty
+        - rename_columns
+        - reorder_columns
+        - round_to_fraction
+        - row_to_names
+        - select
+        - shuffle
+        - sort_column_value_order
+        - sort_naturally
+        - summarise
+        - take_first
+        - then
+        - to_datetime
+        - toset
+        - transform_columns
+        - truncate_datetime
+        - update_where
+        - utils

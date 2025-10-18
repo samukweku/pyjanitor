@@ -56,10 +56,29 @@ def test_coalesce_without_target(df):
 
 @pytest.mark.functions
 def test_coalesce_without_delete():
-    """Test ouptut if nulls remain and `default_value` is provided."""
+    """Test output if nulls remain and `default_value` is provided."""
     df = pd.DataFrame(
         {"s1": [np.nan, np.nan, 6, 9, 9], "s2": [np.nan, 8, 7, 9, 9]}
     )
     expected = df.assign(s3=df.s1.combine_first(df.s2).fillna(0))
     result = df.coalesce("s1", "s2", target_column_name="s3", default_value=0)
     assert_frame_equal(result, expected)
+
+
+def test_coalesce_duplicate_columns():
+    """
+    Test output on duplicate columns.
+    """
+    df = pd.DataFrame(
+        np.array([[1.0, 2.0, 2.0], [np.nan, 3.0, np.nan], [3.0, 1.0, 9.0]]),
+        columns=["a", "a", "c"],
+    )
+
+    expected = pd.DataFrame(
+        np.array([[1.0, 2.0, 2.0], [3, 3.0, np.nan], [3.0, 1.0, 9.0]]),
+        columns=["a", "a", "c"],
+    )
+
+    actual = df.coalesce("a")
+
+    assert_frame_equal(expected, actual)

@@ -1,116 +1,191 @@
-import pandas_flavor as pf
-import pandas as pd
+from __future__ import annotations
 
-from janitor.utils import deprecated_alias
+import pandas as pd
+import pandas_flavor as pf
+
+from janitor.utils import deprecated_alias, deprecated_kwargs
 
 
 @pf.register_dataframe_method
+@deprecated_kwargs(
+    "old_min",
+    "old_max",
+    "new_min",
+    "new_max",
+    message=(
+        "The keyword argument {argument!r} of {func_name!r} is deprecated. "
+        "Please use 'feature_range' instead."
+    ),
+)
 @deprecated_alias(col_name="column_name")
 def min_max_scale(
     df: pd.DataFrame,
-    old_min=None,
-    old_max=None,
-    column_name=None,
-    new_min=0,
-    new_max=1,
+    feature_range: tuple[int | float, int | float] = (0, 1),
+    column_name: str | int | list[str | int] | pd.Index = None,
+    jointly: bool = False,
+) -> pd.DataFrame:
+    """Scales DataFrame to between a minimum and maximum value.
+
+    One can optionally set a new target **minimum** and **maximum** value
+    using the `feature_range` keyword argument.
+
+    If `column_name` is specified, then only that column(s) of data is scaled.
+    Otherwise, the entire dataframe is scaled.
+    If `jointly` is `True`, the `column_names` provided entire dataframe will
+    be regnozied as the one to jointly scale. Otherwise, each column of data
+    will be scaled separately.
+
+    Examples:
+        >>> import pandas as pd
+        >>> import janitor
+        >>> df = pd.DataFrame({'a':[1, 2], 'b':[0, 1]})
+        >>> df.min_max_scale()
+             a    b
+        0  0.0  0.0
+        1  1.0  1.0
+        >>> df.min_max_scale(jointly=True)
+             a    b
+        0  0.5  0.0
+        1  1.0  0.5
+
+        Setting custom minimum and maximum.
+
+        >>> import pandas as pd
+        >>> import janitor
+        >>> df = pd.DataFrame({'a':[1, 2], 'b':[0, 1]})
+        >>> df.min_max_scale(feature_range=(0, 100))
+               a      b
+        0    0.0    0.0
+        1  100.0  100.0
+        >>> df.min_max_scale(feature_range=(0, 100), jointly=True)
+               a     b
+        0   50.0   0.0
+        1  100.0  50.0
+
+        Apply min-max to the selected columns.
+
+        >>> import pandas as pd
+        >>> import janitor
+        >>> df = pd.DataFrame({'a':[1, 2], 'b':[0, 1], 'c': [1, 0]})
+        >>> df.min_max_scale(
+        ...     feature_range=(0, 100),
+        ...     column_name=["a", "c"],
+        ... )
+               a  b      c
+        0    0.0  0  100.0
+        1  100.0  1    0.0
+        >>> df.min_max_scale(
+        ...     feature_range=(0, 100),
+        ...     column_name=["a", "c"],
+        ...     jointly=True,
+        ... )
+               a  b     c
+        0   50.0  0  50.0
+        1  100.0  1   0.0
+        >>> df.min_max_scale(feature_range=(0, 100), column_name='a')
+               a  b  c
+        0    0.0  0  1
+        1  100.0  1  0
+
+        The aforementioned example might be applied to something like scaling the
+        isoelectric points of amino acids. While technically they range from
+        approx 3-10, we can also think of them on the pH scale which ranges from
+        1 to 14. Hence, 3 gets scaled not to 0 but approx. 0.15 instead, while 10
+        gets scaled to approx. 0.69 instead.
+
+    !!! summary "Version Changed"
+
+        - 0.24.0
+            - Deleted `old_min`, `old_max`, `new_min`, and `new_max` options.
+            - Added `feature_range`, and `jointly` options.
+
+    Args:
+        df: A pandas DataFrame.
+        feature_range: Desired range of transformed data.
+        column_name: The column on which to perform scaling.
+        jointly: Scale the entire data if True.
+
+    Raises:
+        ValueError: If `feature_range` isn't tuple type.
+        ValueError: If the length of `feature_range` isn't equal to two.
+        ValueError: If the element of `feature_range` isn't number type.
+        ValueError: If `feature_range[1]` <= `feature_range[0]`.
+
+    Returns:
+        A pandas DataFrame with scaled data.
+    """  # noqa: E501
+
+    if not (
+        isinstance(feature_range, (tuple, list))
+        and len(feature_range) == 2
+        and all((isinstance(i, (int, float))) for i in feature_range)
+        and feature_range[1] > feature_range[0]
+    ):
+        raise ValueError(
+            "`feature_range` should be a range type contains number element, "
+            "the first element must be greater than the second one"
+        )
+
+    if column_name is not None:
+        df = df.copy()  # Avoid to change the original DataFrame.
+
+        old_feature_range = df[column_name].pipe(_min_max_value, jointly)
+        df[column_name] = df[column_name].pipe(
+            _apply_min_max,
+            *old_feature_range,
+            *feature_range,
+        )
+    else:
+        old_feature_range = df.pipe(_min_max_value, jointly)
+        df = df.pipe(
+            _apply_min_max,
+            *old_feature_range,
+            *feature_range,
+        )
+
+    return df
+
+
+def _min_max_value(df: pd.DataFrame, jointly: bool) -> tuple:
+    """
+    Return the minimum and maximum of DataFrame.
+
+    Use the `jointly` flag to control returning entire data or each column.
+
+    .. # noqa: DAR101
+    .. # noqa: DAR201
+    """
+    mmin = df.min()
+    mmax = df.max()
+    if jointly:
+        if not isinstance(mmin, int):
+            mmin = mmin.min()
+        if not isinstance(mmax, int):
+            mmax = mmax.max()
+    return mmin, mmax
+
+
+def _apply_min_max(
+    df: pd.DataFrame,
+    old_min: int | float | pd.Series,
+    old_max: int | float | pd.Series,
+    new_min: int | float | pd.Series,
+    new_max: int | float | pd.Series,
 ) -> pd.DataFrame:
     """
-    Scales data to between a minimum and maximum value.
+    Apply minimax scaler to DataFrame.
 
-    This method mutates the original DataFrame.
+    Notes
+    -----
+    - Inputting minimum and maximum type
+        - int or float : It will apply minimax to the entire DataFrame.
+        - Series : It will apply minimax to each column.
 
-    If `minimum` and `maximum` are provided, the true min/max of the
-    `DataFrame` or column is ignored in the scaling process and replaced with
-    these values, instead.
-
-    One can optionally set a new target minimum and maximum value using the
-    `new_min` and `new_max` keyword arguments. This will result in the
-    transformed data being bounded between `new_min` and `new_max`.
-
-    If a particular column name is specified, then only that column of data
-    are scaled. Otherwise, the entire dataframe is scaled.
-
-    Method chaining syntax:
-
-    ```python
-        df = pd.DataFrame(...).min_max_scale(column_name="a")
-    ```
-
-    Setting custom minimum and maximum:
-
-    ```python
-        df = (
-            pd.DataFrame(...)
-            .min_max_scale(
-                column_name="a",
-                new_min=2,
-                new_max=10
-            )
-        )
-    ```
-
-    Setting a min and max that is not based on the data, while applying to
-    entire dataframe:
-
-
-    ```python
-        df = (
-            pd.DataFrame(...)
-            .min_max_scale(
-                old_min=0,
-                old_max=14,
-                new_min=0,
-                new_max=1,
-            )
-        )
-    ```
-
-    The aforementioned example might be applied to something like scaling the
-    isoelectric points of amino acids. While technically they range from
-    approx 3-10, we can also think of them on the pH scale which ranges from
-    1 to 14. Hence, 3 gets scaled not to 0 but approx. 0.15 instead, while 10
-    gets scaled to approx. 0.69 instead.
-
-    :param df: A pandas DataFrame.
-    :param old_min: (optional) Overrides for the current minimum
-        value of the data to be transformed.
-    :param old_max: (optional) Overrides for the current maximum
-        value of the data to be transformed.
-    :param new_min: (optional) The minimum value of the data after
-        it has been scaled.
-    :param new_max: (optional) The maximum value of the data after
-        it has been scaled.
-    :param column_name: (optional) The column on which to perform scaling.
-    :returns: A pandas DataFrame with scaled data.
-    :raises ValueError: if `old_max` is not greater than `old_min``.
-    :raises ValueError: if `new_max` is not greater than `new_min``.
+    .. # noqa: DAR101
+    .. # noqa: DAR201
     """
-    if (
-        (old_min is not None)
-        and (old_max is not None)
-        and (old_max <= old_min)
-    ):
-        raise ValueError("`old_max` should be greater than `old_min`")
 
-    if new_max <= new_min:
-        raise ValueError("`new_max` should be greater than `new_min`")
-
+    old_range = old_max - old_min
     new_range = new_max - new_min
 
-    if column_name:
-        if old_min is None:
-            old_min = df[column_name].min()
-        if old_max is None:
-            old_max = df[column_name].max()
-        old_range = old_max - old_min
-        df[column_name] = (
-            df[column_name] - old_min
-        ) * new_range / old_range + new_min
-    else:
-        if old_min is None:
-            old_min = df.min().min()
-        if old_max is None:
-            old_max = df.max().max()
-        old_range = old_max - old_min
-        df = (df - old_min) * new_range / old_range + new_min
-    return df
+    return (df - old_min) * new_range / old_range + new_min

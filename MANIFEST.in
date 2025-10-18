@@ -1,4 +1,4 @@
 include .requirements/*
-include *.rst
+include *.md
 include LICENSE
-include CHANGELOG.md
+include mkdocs/*

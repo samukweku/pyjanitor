@@ -1,21 +1,30 @@
-from typing import Hashable
+from __future__ import annotations
+
+from typing import Any, Hashable
+
 import pandas as pd
 import pandas_flavor as pf
 
-from janitor.utils import deprecated_alias
+from janitor.utils import deprecated_alias, refactored_function
 
 
 @pf.register_dataframe_method
+@refactored_function(
+    message=(
+        "This function will be deprecated in a 1.x release. "
+        "Please use `pd.DataFrame.astype` instead."
+    )
+)
 @deprecated_alias(column="column_name")
 def change_type(
     df: pd.DataFrame,
-    column_name: Hashable,
+    column_name: Hashable | list[Hashable] | pd.Index,
     dtype: type,
     ignore_exception: bool = False,
 ) -> pd.DataFrame:
     """Change the type of a column.
 
-    This method mutates the original DataFrame.
+    This method does not mutate the original DataFrame.
 
     Exceptions that are raised can be ignored. For example, if one has a mixed
     dtype column that has non-integer strings and integers, and you want to
@@ -28,7 +37,13 @@ def change_type(
     df[col] = df[col].astype(dtype)
     ```
 
-    Example:
+    !!!note
+
+        This function will be deprecated in a 1.x release.
+        Please use `pd.DataFrame.astype` instead.
+
+    Examples:
+        Change the type of a column.
 
         >>> import pandas as pd
         >>> import janitor
@@ -48,29 +63,51 @@ def change_type(
         1    1   5.0
         2    2   1.0
 
-    :param df: A pandas DataFrame.
-    :param column_name: A column in the dataframe.
-    :param dtype: The datatype to convert to. Should be one of the standard
-        Python types, or a numpy datatype.
-    :param ignore_exception: one of `{False, "fillna", "keep_values"}`.
-    :returns: A pandas DataFrame with changed column types.
-    :raises ValueError: if unknown option provided for
-        `ignore_exception``.
-    """
+        Change the type of multiple columns. To change the type of all columns,
+        please use `DataFrame.astype` instead.
+
+        >>> import pandas as pd
+        >>> import janitor
+        >>> df = pd.DataFrame({"col1": range(3), "col2": ["m", 5, True]})
+        >>> df.change_type(['col1', 'col2'], str)
+          col1  col2
+        0    0     m
+        1    1     5
+        2    2  True
+
+    Args:
+        df: A pandas DataFrame.
+        column_name: The column(s) in the dataframe.
+        dtype: The datatype to convert to. Should be one of the standard
+            Python types, or a numpy datatype.
+        ignore_exception: One of `{False, "fillna", "keep_values"}`.
+
+    Raises:
+        ValueError: If unknown option provided for `ignore_exception`.
+
+    Returns:
+        A pandas DataFrame with changed column types.
+    """  # noqa: E501
+
+    df = df.copy()  # avoid mutating the original DataFrame
     if not ignore_exception:
         df[column_name] = df[column_name].astype(dtype)
     elif ignore_exception == "keep_values":
         df[column_name] = df[column_name].astype(dtype, errors="ignore")
     elif ignore_exception == "fillna":
-
-        def convert(x, dtype):
-            """Casts item `x` to `dtype` or None if not possible."""
-            try:
-                return dtype(x)
-            except ValueError:
-                return None
-
-        df[column_name] = df[column_name].apply(lambda x: convert(x, dtype))
+        if isinstance(column_name, Hashable):
+            column_name = [column_name]
+        df[column_name] = df[column_name].map(_convert, dtype=dtype)
     else:
         raise ValueError("Unknown option for ignore_exception")
+
     return df
+
+
+def _convert(x: Any, dtype: type) -> Any:
+    """Casts item `x` to `dtype` or None if not possible."""
+
+    try:
+        return dtype(x)
+    except ValueError:
+        return None
